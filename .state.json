@@ -1,0 +1,25 @@
+{
+  "Swami's": {
+    "verdict": "MARGINAL",
+    "date": "2026-09-08"
+  },
+  "Grandview": {
+    "verdict": "GO",
+    "date": "2026-09-08",
+    "peak": "2026-09-08T18:00:00-07:00"
+  },
+  "Beacon's": {
+    "verdict": "GO",
+    "date": "2026-09-08",
+    "peak": "2026-09-08T18:00:00-07:00"
+  },
+  "Blacks": {
+    "verdict": "GO",
+    "date": "2026-09-08",
+    "peak": "2026-09-08T18:00:00-07:00"
+  },
+  "Oceanside Harbor": {
+    "verdict": "MARGINAL",
+    "date": "2026-09-08"
+  }
+}

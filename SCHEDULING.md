@@ -63,14 +63,35 @@ bootout + bootstrap to reload. Changing times only: edit both copies, reload.
 To change **how often** it runs, add/remove `<dict>` blocks in
 `StartCalendarInterval`.
 
-## Later: cloud backup (optional)
+## Cloud runner — GitHub Actions (always on)
 
-The local agent only runs while the Mac is on. For an always-on version, push
-this repo to GitHub and create a Claude cloud routine (min 1-hour interval) whose
-prompt is roughly:
+The local agent only runs while the Mac is on. `.github/workflows/surf-check.yml`
+runs the same check in GitHub's cloud on a cron schedule regardless of the Mac.
 
-> Run `python3 check.py --quiet`. If it prints a line starting with `>>> NOTIFY:`,
-> `curl -H "Title: <that spot> surf" -d "<the block>" https://ntfy.sh/HangLoose123`.
+**Setup (one time):**
 
-The checker is self-contained and needs no secrets, so it runs the same in the
-cloud as locally.
+1. Repo: `github.com/colinwehmann-wq/swell-conditions-app` (private).
+2. Push the code:
+   ```bash
+   cd "/Users/colinwehmann/Swell Conditions App" && git push -u origin main
+   ```
+   Username `colinwehmann-wq`; password = a fine-grained personal access token
+   (github.com/settings/personal-access-tokens → this repo → Contents: read/write).
+   macOS keychain remembers it after the first push.
+3. Secret `NTFY_TOPIC` = `HangLoose123` is already set under
+   repo → Settings → Secrets and variables → Actions.
+4. Test: repo → Actions → "surf check" → "Run workflow".
+
+**How it works:** the workflow runs `python3 check.py --quiet` at the cron times
+(UTC; scheduled twice per local check to cover PDT and PST). `.state.json` is
+committed back to the repo after each run so alert de-duplication survives between
+runs. GitHub's scheduler can fire 5–20 min late.
+
+**Change the schedule:** edit the `cron:` lines in the workflow (5-field cron, UTC)
+and push. Remember GitHub pauses cron on repos with 60 days of no commits — the
+state commits keep it alive as long as alerts fire; otherwise push something
+occasionally.
+
+**Avoid double alerts:** once the cloud runs are confirmed, disable the local
+agent — `launchctl bootout gui/$(id -u)/com.colinwehmann.swellconditions` — or
+keep only one of the two.

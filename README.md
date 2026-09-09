@@ -44,6 +44,13 @@ band, period at or above the minimum, and wind not blown out.
 
 Verdicts: `GO` (on now) · `LATER` (a window opens later today) · `MARGINAL` · `FLAT`.
 
+**Upcoming-window alerts.** At each run the checker looks ahead to the next
+scheduled check (`CHECK_TIMES` in `config.py`). If a GO-quality window *starts*
+before that next check, you get a heads-up now — "Grandview turns on around
+10 AM" — even though it isn't good yet, so you don't have to wait for the next
+check to find out. These de-dupe like GO alerts (re-sent on a new day, when the
+window shifts more than an hour, or when it flips to GO).
+
 ### Rating (1–10)
 
 The report and alerts lead with a rating = score ÷ 10, colour-coded:

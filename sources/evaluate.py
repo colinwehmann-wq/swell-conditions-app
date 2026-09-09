@@ -164,7 +164,8 @@ def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, cal
                            use_buoy=near and fresh_buoy, calib=calib)
         total, sub = score(*cond, cfg=cfg)
         rows.append({"time": dt, "score": total, "sub": sub, "cond": cond,
-                     "gates_ok": _gates_ok(cond[0], cond[1], cond[3], cond[4], cfg)})
+                     "gates_ok": _gates_ok(cond[0], cond[1], cond[3], cond[4], cfg),
+                     "tide_state": tide.state(dt) if tide else None})
         dt += datetime.timedelta(hours=1)
     return rows
 
@@ -195,7 +196,7 @@ def _best_window(rows, threshold):
 
 # ------------------------------------------------------------------------- entry
 
-def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow):
+def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow, next_check=None):
     now_cond = _conditions(now, marine.get(floor_hour(now)), wind.get(floor_hour(now)),
                            tide, buoy, use_buoy=True)
     now_total, now_sub = score(*now_cond, cfg=cfg)
@@ -234,6 +235,12 @@ def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow):
         verdict = "MARGINAL"
     else:
         verdict = "FLAT"
+
+    # Does a quality window open between now and the next scheduled check?
+    window_soon = bool(
+        window is not None and day_label == "today"
+        and next_check is not None and window["start"] <= next_check
+    )
 
     # A rating (vs the raw score) reads red whenever a hard gate fails — the
     # swell may be there, but it's not a session you'd want.
@@ -274,6 +281,8 @@ def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow):
         "wind_rel": wind_relation(now_cond[4], cfg),
         "window": window,
         "window_day": day_label if window else None,
+        "window_soon": window_soon,
+        "next_check": next_check,
         "near_miss": near_miss,
         "forecast_height_ft": disagree,
         "notes": cfg.get("notes", ""),

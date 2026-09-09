@@ -13,6 +13,11 @@ Any key in DEFAULTS can be overridden per spot.
 
 TIMEZONE = "America/Los_Angeles"
 
+# Local wall-clock times the checker runs. Used only to answer "is a good window
+# coming before the next check?" — it doesn't have to line up exactly with the
+# GitHub Actions cron, a rough picture of the gaps is enough.
+CHECK_TIMES = ["05:00", "06:00", "07:00", "10:30", "15:00", "16:00"]
+
 DEFAULTS = {
     # Significant wave height (ft). Outside `ok` = no-go; inside `ideal` = full marks.
     "height_ok_ft":     [2.5, 9.0],

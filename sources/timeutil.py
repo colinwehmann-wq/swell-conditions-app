@@ -42,3 +42,23 @@ def clock(dt):
 def hour_label(dt):
     """'6 AM' / '5 PM' style."""
     return dt.strftime("%I %p").lstrip("0")
+
+
+def next_check_after(when, times):
+    """TZ-aware datetime of the next scheduled check strictly after `when`.
+
+    `times` is a list of "HH:MM" local strings. Falls back to +6h if the list
+    is empty or unparseable.
+    """
+    candidates = []
+    for hhmm in times:
+        try:
+            h, m = (int(x) for x in hhmm.split(":"))
+        except (ValueError, AttributeError):
+            continue
+        for day_offset in (0, 1):
+            d = (when + datetime.timedelta(days=day_offset)).date()
+            slot = datetime.datetime(d.year, d.month, d.day, h, m, tzinfo=when.tzinfo or TZ)
+            if slot > when:
+                candidates.append(slot)
+    return min(candidates) if candidates else when + datetime.timedelta(hours=6)

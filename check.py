@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 from sources import evaluate, forecast, ndbc, notify, tides
-from sources.timeutil import TZ, clock, floor_hour, hour_label, now as now_local
+from sources.timeutil import TZ, clock, floor_hour, hour_label, next_check_after, now as now_local
 
 STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".state.json")
 
@@ -155,9 +155,10 @@ def _limiter_phrase(limiter, cond, cfg):
 def _window_line(res):
     w = res["window"]
     if w:
-        return "%s %s–%s, best ~%s   %s" % (
+        soon = "  • before next check" if res.get("window_soon") else ""
+        return "%s %s–%s, best ~%s   %s%s" % (
             res["window_day"], hour_label(w["start"]), hour_label(w["end"]),
-            clock(w["peak"]), _rating_tag(w["peak_score"]))
+            clock(w["peak"]), _rating_tag(w["peak_score"]), soon)
     nm = res.get("near_miss")
     if not nm:
         return "not enough data for a window"
@@ -302,12 +303,12 @@ def _wind_words(wk, wd, cfg):
     return "windy — choppy and messy"
 
 
-def _tide_words(tf, state):
+def _tide_words(tf, state=None):
     if tf is None:
         return "tide unknown"
     level = "Low" if tf < 2.0 else "Medium" if tf < 4.0 else "High"
-    move = {"rising": "coming in", "falling": "going out"}.get(state, "about to turn")
-    return "%s tide, %s" % (level, move)
+    move = {"rising": "coming in", "falling": "going out"}.get(state)
+    return "%s tide, %s" % (level, move) if move else "%s tide" % level
 
 
 def _when_words(res, now):
@@ -323,22 +324,38 @@ def _when_words(res, now):
 
 
 def alert_title(res):
-    rt = _rating(res["rating_score"])
-    return "%s: go surf — %s, %.0f/10" % (
-        res["name"], _RATING_WORD[_rating_band(rt)], rt)
+    if res["verdict"] == "GO":
+        rt = _rating(res["rating_score"])
+        return "%s: go surf — %s, %.0f/10" % (res["name"], _RATING_WORD[_rating_band(rt)], rt)
+    w = res["window"]
+    rt = _rating(w["peak_score"])
+    return "%s: window coming — peak ~%s, %.0f/10" % (res["name"], clock(w["peak"]), rt)
+
+
+def _peak_row(w):
+    for r in w["rows"]:
+        if r["time"] == w["peak"]:
+            return r
+    return w["rows"][0]
 
 
 def format_alert(res, now):
+    if res["verdict"] != "GO":
+        return _format_upcoming(res, now)
+
     rt = _rating(res["rating_score"])
     band = _rating_band(rt)
     h, p, sd, wk, wd, tf = res["now_cond"]
     power = _power_words(p)
+    when = _when_words(res, now)
+    if res.get("next_check"):
+        when += " (next check ~%s)" % clock(res["next_check"])
     lines = [
         "%s %s looks %s (%.1f/10)" % (_DOT[band], res["name"], _RATING_WORD[band], rt),
         "",
         "Waves: %s%s" % (_size_words(h), (", " + power) if power else ""),
         "Wind: %s" % _wind_words(wk, wd, res["cfg"]),
-        "When: %s" % _when_words(res, now),
+        "When: %s" % when,
         "Tide: %s" % _tide_words(tf, res["tide_state"]),
         "",
         _signoff(band),
@@ -348,6 +365,37 @@ def format_alert(res, now):
             "%.0f" % p if p is not None else "?",
             _compass(sd),
             "%.0f" % wk if wk is not None else "?"),
+    ]
+    return "\n".join(lines)
+
+
+def _format_upcoming(res, now):
+    """Alert for a spot that isn't good now but has a quality window before the next check."""
+    w = res["window"]
+    pr = _peak_row(w)
+    ph, pp, psd, pwk, pwd, ptf = pr["cond"]
+    rt = _rating(w["peak_score"])
+    band = _rating_band(rt)
+    power = _power_words(pp)
+    lines = [
+        "%s %s turns on later — %s at its peak (%.1f/10)" % (
+            _DOT[band], res["name"], _RATING_WORD[band], rt),
+        "",
+        "Not yet: right now it's %s" % _cond_line(res["now_cond"], res["tide_state"], res["wind_rel"]),
+        "",
+        "Best window: %s–%s, peak around %s" % (
+            hour_label(w["start"]), hour_label(w["end"]), clock(w["peak"])),
+    ]
+    if res.get("next_check"):
+        lines.append("Next check is ~%s — this is your heads-up to catch it before then." % clock(res["next_check"]))
+    lines += [
+        "",
+        "At the peak:",
+        "  Waves: %s%s" % (_size_words(ph), (", " + power) if power else ""),
+        "  Wind: %s" % _wind_words(pwk, pwd, res["cfg"]),
+        "  Tide: %s" % _tide_words(ptf, pr.get("tide_state")),
+        "",
+        _signoff(band),
     ]
     return "\n".join(lines)
 
@@ -370,18 +418,38 @@ def save_state(state):
         print("  ! could not write state: %s" % e, file=sys.stderr)
 
 
+def alert_kind(res):
+    """'GO' (good now), 'SOON' (quality window before the next check), or None."""
+    if res["verdict"] == "GO":
+        return "GO"
+    if res["verdict"] == "LATER" and res.get("window_soon"):
+        return "SOON"
+    return None
+
+
+def _peaks_far_apart(iso_a, iso_b):
+    if not iso_a or not iso_b:
+        return iso_a != iso_b
+    try:
+        return abs((datetime.datetime.fromisoformat(iso_a)
+                    - datetime.datetime.fromisoformat(iso_b)).total_seconds()) > 3600
+    except ValueError:
+        return iso_a != iso_b
+
+
 def should_alert(res, state, today, force):
-    if res["verdict"] != "GO":
+    kind = alert_kind(res)
+    if kind is None:
         return False
     if force:
         return True
     prev = state.get(res["name"], {})
-    if prev.get("verdict") != "GO":
+    if prev.get("kind") != kind:            # newly good, or SOON -> GO
         return True
-    if prev.get("date") != today:
+    if prev.get("date") != today:           # fresh day
         return True
-    # same day, still GO: re-alert only if the peak window shifted materially
-    if res["window"] and prev.get("peak") != res["window"]["peak"].isoformat():
+    cur_peak = res["window"]["peak"].isoformat() if res["window"] else None
+    if _peaks_far_apart(prev.get("peak"), cur_peak):   # window moved > 1h
         return True
     return False
 
@@ -404,6 +472,7 @@ def run(args):
     ctx = Context(now)
     today = now.date()
     tomorrow = today + datetime.timedelta(days=1)
+    next_check = next_check_after(now, config.CHECK_TIMES)
 
     spots = [config.spot_config(s) for s in config.SPOTS]
     if args.spot:
@@ -423,6 +492,7 @@ def run(args):
             ctx.wind(cfg["lat"], cfg["lon"]),
             ctx.sun(cfg["lat"], cfg["lon"], today),
             ctx.sun(cfg["lat"], cfg["lon"], tomorrow),
+            next_check=next_check,
         )
         results.append(res)
 
@@ -440,13 +510,10 @@ def run(args):
         for res in alerts:
             notify.send(alert_title(res), format_alert(res, now))
         for res in results:
-            if res["verdict"] == "GO" and res["window"]:
-                state[res["name"]] = {"verdict": "GO", "date": today.isoformat(),
-                                      "peak": res["window"]["peak"].isoformat()}
-            elif res["verdict"] == "GO":
-                state[res["name"]] = {"verdict": "GO", "date": today.isoformat(), "peak": None}
-            else:
-                state[res["name"]] = {"verdict": res["verdict"], "date": today.isoformat()}
+            entry = {"kind": alert_kind(res) or res["verdict"], "date": today.isoformat()}
+            if res["window"]:
+                entry["peak"] = res["window"]["peak"].isoformat()
+            state[res["name"]] = entry
         save_state(state)
 
     if not args.quiet or alerts:
@@ -465,6 +532,9 @@ def _jsonable(results, now):
         out["spots"].append({
             "name": r["name"],
             "verdict": r["verdict"],
+            "alert_kind": alert_kind(r),
+            "window_soon": r.get("window_soon", False),
+            "next_check": r["next_check"].isoformat() if r.get("next_check") else None,
             "score": round(r["now_score"], 1),
             "rating": _rating(r["rating_score"]),
             "rating_band": _rating_band(_rating(r["rating_score"])),
@@ -492,7 +562,7 @@ def main():
     p = argparse.ArgumentParser(description="North County SD surf checker")
     p.add_argument("--report", action="store_true", help="print report only, no alerts")
     p.add_argument("--quiet", action="store_true", help="print nothing unless alerting")
-    p.add_argument("--force", action="store_true", help="alert every GO spot")
+    p.add_argument("--force", action="store_true", help="alert every GO / upcoming-window spot, ignoring dedupe")
     p.add_argument("--spot", metavar="TEXT", help="only spots matching TEXT")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--now", metavar="ISO", help="pretend it's this local time, e.g. 2026-09-09T06:30 (debug)")

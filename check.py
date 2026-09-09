@@ -400,6 +400,94 @@ def _format_upcoming(res, now):
     return "\n".join(lines)
 
 
+def format_check(res, now):
+    """On-demand 'what's it doing right now' notification for one spot — any verdict."""
+    rt = _rating(res["rating_score"])
+    band = _rating_band(rt)
+    h, p, sd, wk, wd, tf = res["now_cond"]
+    power = _power_words(p)
+    b = res["buoy"]
+    src = ("buoy %s, %d min old" % (b["buoy"], round(b["age_hours"] * 60))) if b else "no buoy (model only)"
+    lines = [
+        "%s %s right now — %s (%.1f/10)" % (_DOT[band], res["name"], _RATING_WORD[band], rt),
+        "",
+        "Waves: %s%s" % (_size_words(h), (", " + power) if power else ""),
+        "Wind: %s" % _wind_words(wk, wd, res["cfg"]),
+        "Tide: %s" % _tide_words(tf, res["tide_state"]),
+        "",
+    ]
+    w = res["window"]
+    if w:
+        lines.append("Best %s: %s–%s, peak ~%s (%s)" % (
+            res["window_day"], hour_label(w["start"]), hour_label(w["end"]),
+            clock(w["peak"]), _rating_tag(w["peak_score"], plain=True)))
+        if res.get("window_soon"):
+            lines.append("That's before the next check (~%s)." % clock(res["next_check"]))
+    elif res.get("near_miss"):
+        nm = res["near_miss"]
+        lines.append("No window %s — closest is ~%s, held back by %s" % (
+            nm["day"], clock(nm["time"]), _limiter_phrase(nm["limiter"], nm["cond"], res["cfg"])))
+    lines += [
+        "",
+        _bottom_line([res]),
+        "",
+        "(%s · %s ft @ %s s from the %s, wind %s kt)" % (
+            src,
+            "%.1f" % h if h is not None else "?",
+            "%.0f" % p if p is not None else "?",
+            _compass(sd),
+            "%.0f" % wk if wk is not None else "?"),
+    ]
+    return "\n".join(lines)
+
+
+_VERDICT_ORDER = {"GO": 0, "LATER": 1, "MARGINAL": 2, "FLAT": 3}
+
+
+def _best_first(results):
+    return sorted(results, key=lambda r: (_VERDICT_ORDER[r["verdict"]], -r["now_score"]))
+
+
+def _digest_row(res):
+    h, p, sd, wk, wd, tf = res["now_cond"]
+    r = _rating(res["rating_score"])
+    size = "%.1f ft" % h if h is not None else "? ft"
+    per = " @ %.0fs" % p if (p is not None and p >= 12) else ""
+    if wk is None:
+        wind = "wind ?"
+    elif wk < 4:
+        wind = "%.0f kt glassy" % wk
+    else:
+        rel = evaluate.wind_relation(wd, res["cfg"])
+        wind = ("%.0f kt %s" % (wk, rel)).strip() if rel else "%.0f kt" % wk
+    if res["verdict"] == "GO":
+        tail = "  → GO now"
+    elif res["verdict"] == "LATER" and res["window"]:
+        label = "window" if res.get("window_soon") else "later"
+        tail = "  → %s ~%s" % (label, clock(res["window"]["peak"]))
+    else:
+        tail = ""
+    return "%s %s  %.1f/10 — %s%s, %s%s" % (
+        _DOT[_rating_band(r)], res["name"], r, size, per, wind, tail)
+
+
+def digest_title(results):
+    best = _best_first(results)[0]
+    r = _rating(best["rating_score"])
+    if best["verdict"] == "GO":
+        return "Dawn check: %s is ON (%.0f/10)" % (best["name"], r)
+    if best["verdict"] == "LATER":
+        return "Dawn check: %s window later (%.0f/10)" % (best["name"], r)
+    return "Dawn check: nothing today (best %.0f/10)" % r
+
+
+def format_digest(results, now):
+    lines = ["Morning surf check — %s" % now.strftime("%a %b %-d"), ""]
+    lines += [_digest_row(res) for res in _best_first(results)]
+    lines += ["", _bottom_line(results)]
+    return "\n".join(lines)
+
+
 # ------------------------------------------------------------------------- state
 
 def load_state():
@@ -475,11 +563,12 @@ def run(args):
     next_check = next_check_after(now, config.CHECK_TIMES)
 
     spots = [config.spot_config(s) for s in config.SPOTS]
-    if args.spot:
-        q = args.spot.lower()
+    spot_filter = args.spot or args.notify
+    if spot_filter:
+        q = spot_filter.lower()
         spots = [s for s in spots if q in s["name"].lower()]
         if not spots:
-            print("no spot matches %r" % args.spot, file=sys.stderr)
+            print("no spot matches %r" % spot_filter, file=sys.stderr)
             return 2
 
     results = []
@@ -500,9 +589,17 @@ def run(args):
         print(json.dumps(_jsonable(results, now), indent=2, default=str))
         return 0
 
+    if args.notify:
+        for res in results:
+            body = format_check(res, now)
+            notify.send("Swell check: %s" % res["name"], body)
+        return 0
+
     report = format_report(results, now)
     alerts = []
     if not args.report:
+        if args.digest:
+            notify.send(digest_title(results), format_digest(results, now))
         state = load_state()
         for res in results:
             if should_alert(res, state, today.isoformat(), args.force):
@@ -567,6 +664,8 @@ def main():
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--now", metavar="ISO", help="pretend it's this local time, e.g. 2026-09-09T06:30 (debug)")
     p.add_argument("--test-alert", action="store_true", help="send one sample notification to verify delivery, then exit")
+    p.add_argument("--notify", metavar="SPOT", help="push an on-demand conditions check for SPOT (any verdict), then exit")
+    p.add_argument("--digest", action="store_true", help="push a one-shot summary of all spots (use on the first check of the day)")
     sys.exit(run(p.parse_args()))
 
 

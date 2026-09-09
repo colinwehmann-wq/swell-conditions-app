@@ -19,6 +19,10 @@ on:
         description: "Re-send alerts for every GO spot (ignore what was already sent) — for testing"
         type: boolean
         default: false
+      digest:
+        description: "Also send the morning digest — for testing (it fires automatically on the 05:15 run)"
+        type: boolean
+        default: false
 
 concurrency:
   group: surf-check          # never let two runs overlap (they both push state)
@@ -37,7 +41,8 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           # optional: add SURF_WEBHOOK_URL as a secret too and uncomment
           # SURF_WEBHOOK_URL: ${{ secrets.SURF_WEBHOOK_URL }}
-        run: python3 check.py --quiet ${{ inputs.force && '--force' || '' }}
+        # --digest on the first check of the day (05:15 PDT / 04:15 PST) or on request
+        run: python3 check.py --quiet ${{ (github.event.schedule == '15 12 * * *' || inputs.digest) && '--digest' || '' }} ${{ inputs.force && '--force' || '' }}
 
       - name: Persist alert state
         if: always()          # even if the check step reported no spots

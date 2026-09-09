@@ -12,11 +12,11 @@
     "date": "2026-09-09"
   },
   "Blacks": {
-    "kind": "MARGINAL",
+    "kind": "FLAT",
     "date": "2026-09-09"
   },
   "Oceanside Harbor": {
-    "kind": "MARGINAL",
+    "kind": "FLAT",
     "date": "2026-09-09"
   }
 }

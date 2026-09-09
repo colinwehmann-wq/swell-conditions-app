@@ -389,6 +389,14 @@ def should_alert(res, state, today, force):
 # -------------------------------------------------------------------------- main
 
 def run(args):
+    if args.test_alert:
+        notify.send(
+            "Surf check: test alert",
+            "\U0001f919 If this lands on your phone, notifications are wired up, bra.\n"
+            "Real alerts only fire when a spot is actually worth surfing.\n\n"
+            "Shoots!")
+        return 0
+
     if args.now:
         now = datetime.datetime.strptime(args.now, "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
     else:
@@ -488,6 +496,7 @@ def main():
     p.add_argument("--spot", metavar="TEXT", help="only spots matching TEXT")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--now", metavar="ISO", help="pretend it's this local time, e.g. 2026-09-09T06:30 (debug)")
+    p.add_argument("--test-alert", action="store_true", help="send one sample notification to verify delivery, then exit")
     sys.exit(run(p.parse_args()))
 
 

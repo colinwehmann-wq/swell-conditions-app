@@ -223,7 +223,31 @@ def format_report(results, now):
                        % (h_now, res["forecast_height_ft"]))
         out.append("   peak:  %s" % _window_line(res))
     out.append("")
+    out.append(_bottom_line(results))
+    out.append("")
     return "\n".join(out)
+
+
+def _bottom_line(results):
+    """The surfer-talk verdict across all spots."""
+    order = {"GO": 0, "LATER": 1, "MARGINAL": 2, "FLAT": 3}
+    best = min(results, key=lambda r: (order[r["verdict"]], -r["now_score"]))
+    name = best["name"]
+    if best["verdict"] == "GO":
+        band = _rating_band(_rating(best["rating_score"]))
+        if band == "green":
+            return "\U0001f919 Bottom line: %s is FIRING — get out there, bra! Whatcha waitin' for?!" % name
+        return "\U0001f919 Bottom line: %s's got a little somethin', bra. Worth a paddle out. Shoots!" % name
+    if best["verdict"] == "LATER" and best["window"]:
+        return ("Bottom line: Nothin' doin' right now, bra — but %s could switch on 'round %s. Stay loose."
+                % (name, clock(best["window"]["peak"])))
+    return "Bottom line: Na bra, not this time around. Shoots! \U0001f919"
+
+
+def _signoff(band):
+    if band == "green":
+        return "\U0001f919 Get out there, bra! Whatcha waitin' for?!"
+    return "\U0001f919 Not epic, but it'll do, bra. Go get wet — shoots!"
 
 
 # --- plain-language translations for the phone notification --------------------
@@ -316,6 +340,8 @@ def format_alert(res, now):
         "Wind: %s" % _wind_words(wk, wd, res["cfg"]),
         "When: %s" % _when_words(res, now),
         "Tide: %s" % _tide_words(tf, res["tide_state"]),
+        "",
+        _signoff(band),
         "",
         "(buoy: %s ft, %s sec, from the %s; wind %s kt)" % (
             "%.1f" % h if h is not None else "?",

@@ -1,22 +1,22 @@
 {
   "Swami's": {
     "kind": "MARGINAL",
-    "date": "2026-09-08"
+    "date": "2026-09-09"
   },
   "Grandview": {
     "kind": "MARGINAL",
-    "date": "2026-09-08"
+    "date": "2026-09-09"
   },
   "Beacon's": {
     "kind": "MARGINAL",
-    "date": "2026-09-08"
+    "date": "2026-09-09"
   },
   "Blacks": {
     "kind": "MARGINAL",
-    "date": "2026-09-08"
+    "date": "2026-09-09"
   },
   "Oceanside Harbor": {
-    "kind": "FLAT",
-    "date": "2026-09-08"
+    "kind": "MARGINAL",
+    "date": "2026-09-09"
   }
 }

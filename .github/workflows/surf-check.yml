@@ -7,50 +7,55 @@ name: surf check
 
 on:
   schedule:
-    - cron: "15 12 * * *"   # 05:15 PDT / 04:15 PST  — pre-dawn
+    - cron: "15 12 * * *"   # 05:15 PDT / 04:15 PST  — pre-dawn (also sends the digest)
     - cron: "15 13 * * *"   # 06:15 PDT / 05:15 PST  — dawn patrol
     - cron: "15 14 * * *"   # 07:15 PDT / 06:15 PST
     - cron: "30 17 * * *"   # 10:30 PDT / 09:30 PST  — mid-morning
     - cron: "0 22 * * *"    # 15:00 PDT / 14:00 PST  — afternoon
     - cron: "0 23 * * *"    # 16:00 PDT / 15:00 PST
-  workflow_dispatch:          # "Run workflow" button on the Actions tab
+  workflow_dispatch:
     inputs:
       force:
-        description: "Re-send alerts for every GO spot (ignore what was already sent) — for testing"
+        description: "Re-send alerts for every GO / upcoming-window spot (ignore dedupe) — for testing"
         type: boolean
         default: false
       digest:
-        description: "Also send the morning digest — for testing (it fires automatically on the 05:15 run)"
+        description: "Also send the digest — for testing (it fires automatically on the 05:15 run)"
         type: boolean
         default: false
 
 concurrency:
-  group: surf-check          # never let two runs overlap (they both push state)
+  group: surf-check          # never let two runs overlap (they share cached state)
   cancel-in-progress: false
+
+permissions:
+  contents: read             # nothing is written back to the repo any more
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write         # to commit .state.json back to the repo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      # Alert-dedupe state lives in the Actions cache, not the repo. Each run
+      # writes a new entry keyed by run id; restore-keys grabs the most recent.
+      - name: Restore alert state
+        uses: actions/cache/restore@v4
+        with:
+          path: .state.json
+          key: surf-state-${{ github.run_id }}
+          restore-keys: surf-state-
 
       - name: Run surf check
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          # optional: add SURF_WEBHOOK_URL as a secret too and uncomment
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}   # optional: healthchecks.io ping URL
           # SURF_WEBHOOK_URL: ${{ secrets.SURF_WEBHOOK_URL }}
-        # --digest on the first check of the day (05:15 PDT / 04:15 PST) or on request
         run: python3 check.py --quiet ${{ (github.event.schedule == '15 12 * * *' || inputs.digest) && '--digest' || '' }} ${{ inputs.force && '--force' || '' }}
 
-      - name: Persist alert state
-        if: always()          # even if the check step reported no spots
-        run: |
-          git add -f .state.json 2>/dev/null || exit 0
-          if ! git diff --cached --quiet; then
-            git -c user.name="surf-check bot" \
-                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-                commit -m "update alert state [skip ci]"
-            git push
-          fi
+      - name: Save alert state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .state.json
+          key: surf-state-${{ github.run_id }}

@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from sources import evaluate, forecast, ndbc, notify, tides
+from sources import evaluate, forecast, http, ndbc, notify, tides
 from sources.timeutil import TZ, clock, floor_hour, hour_label, next_check_after, now as now_local
 
 STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".state.json")
@@ -471,20 +471,45 @@ def _digest_row(res):
         _DOT[_rating_band(r)], res["name"], r, size, per, wind, tail)
 
 
-def digest_title(results):
+def _time_of_day(now):
+    h = now.hour
+    return "Morning" if h < 11 else "Midday" if h < 15 else "Evening"
+
+
+def digest_title(results, now):
     best = _best_first(results)[0]
     r = _rating(best["rating_score"])
+    when = _time_of_day(now)
     if best["verdict"] == "GO":
-        return "Dawn check: %s is ON (%.0f/10)" % (best["name"], r)
+        return "%s check: %s is ON (%.0f/10)" % (when, best["name"], r)
     if best["verdict"] == "LATER":
-        return "Dawn check: %s window later (%.0f/10)" % (best["name"], r)
-    return "Dawn check: nothing today (best %.0f/10)" % r
+        return "%s check: %s window later (%.0f/10)" % (when, best["name"], r)
+    return "%s check: nothing today (best %.0f/10)" % (when, r)
 
 
-def format_digest(results, now):
-    lines = ["Morning surf check — %s" % now.strftime("%a %b %-d"), ""]
+def _last_alert_note(meta, now):
+    """A one-liner confirming the alert path still works (or when it last fired)."""
+    iso = (meta or {}).get("last_alert")
+    if not iso:
+        return "No GO alerts sent yet — you'll get one when a spot fires."
+    try:
+        days = (now - datetime.datetime.fromisoformat(iso)).total_seconds() / 86400.0
+    except ValueError:
+        return None
+    if days < 1:
+        return "Last GO alert: earlier today."
+    n = int(days)
+    tail = " — all quiet, nothing wrong, just no swell" if n >= 6 else ""
+    return "Last GO alert: %d day%s ago%s" % (n, "" if n == 1 else "s", tail)
+
+
+def format_digest(results, now, meta=None):
+    lines = ["%s surf check — %s" % (_time_of_day(now), now.strftime("%a %b %-d")), ""]
     lines += [_digest_row(res) for res in _best_first(results)]
     lines += ["", _bottom_line(results)]
+    note = _last_alert_note(meta, now)
+    if note:
+        lines += ["", note]
     return "\n".join(lines)
 
 
@@ -598,24 +623,43 @@ def run(args):
     report = format_report(results, now)
     alerts = []
     if not args.report:
-        if args.digest:
-            notify.send(digest_title(results), format_digest(results, now))
         state = load_state()
+        meta = state.setdefault("_meta", {})
+
+        if args.digest:
+            notify.send(digest_title(results, now), format_digest(results, now, meta))
+
         for res in results:
             if should_alert(res, state, today.isoformat(), args.force):
                 alerts.append(res)
         for res in alerts:
             notify.send(alert_title(res), format_alert(res, now))
+
         for res in results:
             entry = {"kind": alert_kind(res) or res["verdict"], "date": today.isoformat()}
             if res["window"]:
                 entry["peak"] = res["window"]["peak"].isoformat()
             state[res["name"]] = entry
+        if alerts:
+            meta["last_alert"] = now.isoformat()
+        meta["last_run"] = now.isoformat()
         save_state(state)
+        _ping_healthcheck()
 
     if not args.quiet or alerts:
         print(report)
     return 0
+
+
+def _ping_healthcheck():
+    """Tell an external monitor (e.g. healthchecks.io) the run completed."""
+    url = os.environ.get("HEALTHCHECK_URL", "").strip()
+    if not url:
+        return
+    try:
+        http.get(url, timeout=10, tries=2)
+    except Exception:  # noqa: BLE001 - best effort
+        pass
 
 
 def _jsonable(results, now):

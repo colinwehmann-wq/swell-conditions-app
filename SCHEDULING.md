@@ -80,17 +80,23 @@ runs the same check in GitHub's cloud on a cron schedule regardless of the Mac.
    macOS keychain remembers it after the first push.
 3. Secret `NTFY_TOPIC` = `HangLoose123` is already set under
    repo → Settings → Secrets and variables → Actions.
-4. Test: repo → Actions → "surf check" → "Run workflow".
+4. Optional: add a `HEALTHCHECK_URL` secret pointing at a free
+   [healthchecks.io](https://healthchecks.io) check — you'll get an email if the
+   workflow ever stops running entirely.
+5. Test: repo → Actions → "surf check" → "Run workflow".
 
 **How it works:** the workflow runs `python3 check.py --quiet` at the cron times
-(UTC; scheduled twice per local check to cover PDT and PST). `.state.json` is
-committed back to the repo after each run so alert de-duplication survives between
-runs. GitHub's scheduler can fire 5–20 min late.
+(UTC; scheduled twice per local check to cover PDT and PST). The `05:15` run also
+passes `--digest`. Alert de-dupe state (`.state.json`) is stored in the **GitHub
+Actions cache** — restored at the start of each run and saved at the end, keyed by
+run id with a rolling `surf-state-` prefix. GitHub's scheduler can fire 5–20 min
+late.
 
 **Change the schedule:** edit the `cron:` lines in the workflow (5-field cron, UTC)
-and push. Remember GitHub pauses cron on repos with 60 days of no commits — the
-state commits keep it alive as long as alerts fire; otherwise push something
-occasionally.
+and push. GitHub disables cron on repos with **60 days of no commits** — a `git`
+push (or the tests workflow on any branch push) resets that clock, so commit
+something at least every couple of months, or the `HEALTHCHECK_URL` ping will tell
+you when it's gone quiet.
 
 **Avoid double alerts:** once the cloud runs are confirmed, disable the local
 agent — `launchctl bootout gui/$(id -u)/com.colinwehmann.swellconditions` — or

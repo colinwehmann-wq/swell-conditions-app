@@ -86,6 +86,7 @@ Console output always. Add channels with environment variables:
 | `NTFY_TOPIC` | POST alerts to `https://ntfy.sh/<topic>` — install the free **ntfy** app, subscribe to that topic, done. Set `NTFY_SERVER` to use a self-hosted server. |
 | `SURF_WEBHOOK_URL` | POST `{title, text}` JSON — Slack / Discord / custom incoming webhook. |
 | `SURF_MACOS_NOTIFY=1` | Local macOS notification banner (only when this Mac runs the check). |
+| `HEALTHCHECK_URL` | GET this URL after a successful scheduled run — point it at a [healthchecks.io](https://healthchecks.io) check (free) and it emails you if the job stops running at all. |
 
 A phone alert reads in plain language, e.g.:
 
@@ -104,8 +105,22 @@ Tide: Medium tide, coming in
 The wording maps from the raw numbers in `format_alert` / the `_*_words` helpers
 in `check.py` — tweak the phrasing or thresholds there.
 
-State of what's already been alerted lives in `.state.json` (gitignored). A spot
-re-alerts when it flips to GO, on a new day, or when its peak window shifts.
+Alert de-dupe state (what's already been sent, plus a `_meta` block with the last
+run / last GO alert time) lives in `.state.json` — gitignored locally, and in the
+GitHub Actions cache when running in CI. A spot re-alerts when it flips to GO, on
+a new day, or when its peak window shifts by more than an hour. The morning digest
+footer reports when the last GO alert fired, so a long flat stretch reads as
+"working, no swell" rather than "maybe broken".
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Stdlib `unittest`, no dependencies. Covers the scoring curves, compass-arc
+wraparound, hard gates, window finding, tide interpolation, the next-check clock,
+and NDBC feed parsing. Runs on every push via `.github/workflows/tests.yml`.
 
 ## Running it automatically
 

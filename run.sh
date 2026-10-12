@@ -5,9 +5,12 @@
 cd "$(dirname "$0")" || exit 1
 
 # --- notification channels ---------------------------------------------------
-export NTFY_TOPIC="HangLoose123"       # phone push via the ntfy app
-export SURF_MACOS_NOTIFY="1"           # also drop a macOS banner when the Mac is awake
-# export SURF_WEBHOOK_URL="https://..." # optional Slack/Discord webhook
+# Secrets live in a gitignored .env next to this script (copy .env.example).
+# Supported: NTFY_TOPIC, SURF_WEBHOOK_URL, SURF_MACOS_NOTIFY.
+if [ -f .env ]; then
+  set -a; . ./.env; set +a
+fi
+export SURF_MACOS_NOTIFY="${SURF_MACOS_NOTIFY:-1}"   # macOS banner when the Mac is awake
 
 mkdir -p logs
 LOG="logs/run.log"

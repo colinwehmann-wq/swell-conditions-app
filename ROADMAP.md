@@ -28,8 +28,10 @@ formatters + state I/O).
   footer surfaces "last GO alert: N days ago" so a flat stretch doesn't look
   like a failure. Optional `HEALTHCHECK_URL` ping for external monitoring.
 - [x] **Time-aware digest** — "Morning / Midday / Evening check".
-- [ ] End the PAT dance — `gh auth login` or GitHub Desktop (token expires Oct 8).
-- [ ] Disable the local LaunchAgent (redundant with the cloud runner).
+- [ ] Move pushes off hand-pasted personal access tokens — `gh auth login` or
+  GitHub Desktop.
+- [x] Retired the local LaunchAgent (redundant with the cloud runner); it remains
+  as an optional template, see `SCHEDULING.md`.
 
 ## Tier 2 — real added value
 

@@ -1,7 +1,28 @@
 # Swell Conditions App
 
-Checks live buoy + tide + wind data for five North County San Diego breaks and
-tells you when it's worth paddling out — plus the best window and peak time.
+A surf-alert system for North County San Diego. It pulls live data from NOAA
+buoys, tide predictions, and a wind/wave forecast, scores five breaks against
+per-spot criteria, and sends a plain-language phone notification — with the best
+time window — only when a spot is actually worth paddling out. It runs unattended
+in GitHub Actions on a schedule.
+
+**How it's built**
+
+- **Dependency-free Python** (standard library only), so the scheduled job has
+  nothing to install and little to break.
+- **Live buoy data, sanity-checked.** NDBC buoy readings are the source of truth;
+  the forecast model is calibrated to the buoy so its trend carries through
+  without its coastal bias. Falls back to the model if a buoy goes offline.
+- **Scoring with hard gates.** A weighted 0–100 score (height, period, swell
+  direction, wind, tide) plus pass/fail gates, so a good swell with a blown-out
+  wind never reads as "go."
+- **Look-ahead alerts.** At each run it checks whether a good window opens before
+  the *next* scheduled check and warns you early.
+- **De-duplicated alerts** with state kept in the GitHub Actions cache, plus a
+  daily digest and a heartbeat footer.
+- **69 unit tests** covering the scoring, tide interpolation, scheduling clock, and
+  feed parsing, run in CI on every push. See [`ROADMAP.md`](ROADMAP.md) for the
+  review and what's planned next.
 
 Spots: **Swami's, Grandview, Beacon's, Blacks, Oceanside Harbor**
 

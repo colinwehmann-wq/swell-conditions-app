@@ -106,6 +106,31 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
   .hero, .spot-hero { padding: 40px 0 32px; }
 }
 
+/* ---- photo heroes: the photo is always dark-scrimmed, so the text inside is light in both themes ---- */
+.hero, .spot-hero { position: relative; overflow: hidden; isolation: isolate; }
+.has-photo {
+  --ink: #ffffff; --ink-2: rgba(255, 255, 255, 0.88); --muted: rgba(255, 255, 255, 0.74);
+  --link: #a9cdf7; --surface: rgba(8, 14, 22, 0.6); --hair: rgba(255, 255, 255, 0.3); --axis: rgba(255, 255, 255, 0.42);
+  color: var(--ink); display: flex; align-items: flex-end; min-height: 460px; padding: 96px 0 56px;
+}
+.has-photo > .wrap { width: 100%; }
+.has-photo::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(6, 12, 20, 0.84) 0%, rgba(6, 12, 20, 0.58) 55%, rgba(6, 12, 20, 0.28) 100%),
+    linear-gradient(0deg, rgba(6, 12, 20, 0.6) 0%, rgba(6, 12, 20, 0) 50%);
+}
+.hero-bg { position: absolute; inset: 0; z-index: -2; overflow: hidden; background: #0e1a28; }
+.hero-bg img { display: block; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 65%; animation: drift 45s ease-in-out infinite alternate; }
+@keyframes drift { from { transform: scale(1.02); } to { transform: scale(1.1) translate(-1.2%, -1%); } }
+@media (prefers-reduced-motion: reduce) { .hero-bg img { animation: none; } }
+.photo-credit { position: absolute; right: 16px; bottom: 10px; margin: 0; font-size: 0.72rem; color: rgba(255, 255, 255, 0.78); text-align: right; }
+.photo-credit a { color: inherit; }
+@media (max-width: 760px) {
+  .has-photo { min-height: 0; padding: 72px 0 56px; }
+  .has-photo::before { background: linear-gradient(0deg, rgba(6, 12, 20, 0.82) 0%, rgba(6, 12, 20, 0.5) 100%); }
+}
+
 /* ---- rating chip (status: icon + number + label) ---- */
 .chip { display: inline-flex; align-items: center; gap: 0.5em; padding: 0.2em 0.7em 0.2em 0.25em; border: 1px solid var(--hair); border-radius: 999px; background: var(--surface); font-size: 0.95rem; line-height: 1.2; white-space: nowrap; }
 .chip-ico { display: grid; place-items: center; width: 1.45em; height: 1.45em; border-radius: 50%; font-size: 0.82em; font-weight: 700; color: #fff; }
@@ -130,7 +155,11 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 
 /* ---- spot rows ---- */
 .rows { border-bottom: 1px solid var(--hair); }
-.row { display: grid; grid-template-columns: 190px 150px 1fr 230px; gap: 24px; padding: 24px 0; border-top: 1px solid var(--hair); align-items: start; }
+.row { display: grid; grid-template-columns: 132px 160px 150px 1fr 210px; gap: 24px; padding: 24px 0; border-top: 1px solid var(--hair); align-items: start; }
+.row-photo { display: block; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; background: var(--wash); }
+.row-photo img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
+.row:hover .row-photo img { transform: scale(1.06); }
+@media (prefers-reduced-motion: reduce) { .row-photo img { transition: none; } .row:hover .row-photo img { transform: none; } }
 .row-name h3 { font-family: var(--serif); font-size: 1.4rem; font-weight: 500; }
 .row-name a { color: var(--ink); text-decoration: none; }
 .row-name a:hover { text-decoration: underline; }
@@ -142,8 +171,12 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .board strong { color: var(--ink); }
 .tag { display: inline-block; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border: 1px solid var(--axis); border-radius: 3px; color: var(--ink-2); margin-right: 4px; }
 @media (max-width: 900px) {
-  .row { grid-template-columns: 1fr auto; gap: 12px 16px; }
+  .row { grid-template-columns: 96px minmax(0, 1fr); gap: 8px 16px; align-items: center; }
+  .row-photo { grid-row: 1 / span 2; }
+  .row-name, .row-rate { grid-column: 2; }
+  .row-rate { justify-self: start; }
   .row-body, .row-when { grid-column: 1 / -1; }
+  .row-body { margin-top: 6px; }
 }
 
 /* ---- outlook matrix ---- */
@@ -251,6 +284,9 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .foot { border-top: 1px solid var(--hair); padding: 40px 0 56px; font-size: 0.88rem; color: var(--ink-2); }
 .foot-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 32px; }
 .foot-h { font-family: var(--sans); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
-@media (max-width: 760px) { .foot-grid { grid-template-columns: 1fr; } }
+.foot-credits { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--hair); }
+.foot-credits ul { columns: 2; column-gap: 32px; font-size: 0.82rem; }
+.foot-credits li { break-inside: avoid; }
+@media (max-width: 760px) { .foot-grid { grid-template-columns: 1fr; } .foot-credits ul { columns: 1; } }
 
 @media print { .top, .subs, .theme, .tip { display: none; } }

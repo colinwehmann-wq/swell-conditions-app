@@ -8,6 +8,8 @@ import datetime
 import html
 from urllib.parse import urlparse
 
+from . import media
+
 _CLS = {"green": "good", "yellow": "ok", "red": "poor"}
 _ICO = {"green": "✓", "yellow": "!", "red": "✕"}
 
@@ -96,6 +98,47 @@ def window_text(spot):
     return "Best %s: %s–%s, peak %s" % (w.get("day") or "today", _hour(w["start"]), _hour(w["end"]), _clock(w["peak"]))
 
 
+# ------------------------------------------------------------------------ photos
+
+def _photo_credit(p):
+    return ('Photo: <a href="%s" rel="noopener">%s</a> · <a href="%s" rel="noopener">%s</a>'
+            % (esc(p["source"]), esc(p["author"]), esc(p["licence"][1]), esc(p["licence"][0])))
+
+
+def _hero_bg(slug, prefix, decorative=True):
+    """Full-bleed photo behind a hero, plus its visible credit. Empty if there's no photo."""
+    p = media.photo(slug)
+    if not p:
+        return "", ""
+    img = ('<div class="hero-bg"%s><img src="%sassets/img/%s" alt="%s" width="%d" height="%d" '
+           'style="object-position:%s" decoding="async" fetchpriority="high"></div>'
+           % (' aria-hidden="true"' if decorative else "", prefix, esc(p["file"]),
+              "" if decorative else esc(p["alt"]), p["w"], p["h"], esc(p["pos"])))
+    return img, '<p class="photo-credit">%s</p>' % _photo_credit(p)
+
+
+def _thumb(slug, prefix):
+    p = media.photo(slug)
+    if not p:
+        return ""
+    return ('<a class="row-photo" href="%sspots/%s/" tabindex="-1" aria-hidden="true">'
+            '<img src="%sassets/img/%s" alt="" width="%d" height="%d" loading="lazy" decoding="async" '
+            'style="object-position:%s"></a>'
+            % (prefix, esc(slug), prefix, esc(p["file"]), p["w"], p["h"], esc(p["pos"])))
+
+
+def _photo_credits(payload):
+    items = []
+    for s in payload["spots"]:
+        p = media.photo(s["slug"])
+        if p:
+            items.append('<li><strong>%s</strong> — <a href="%s" rel="noopener">%s</a>, '
+                         '<a href="%s" rel="noopener">%s</a>, cropped and resized</li>'
+                         % (esc(s["name"]), esc(p["source"]), esc(p["author"]),
+                            esc(p["licence"][1]), esc(p["licence"][0])))
+    return "".join(items)
+
+
 # ------------------------------------------------------------------------- shell
 
 def _header(prefix):
@@ -125,13 +168,23 @@ def _footer(payload):
         '<div><h2 class="foot-h">Please note</h2>'
         '<p>Informational only. Forecasts are wrong, buoys go offline, and the ocean is dangerous — '
         'check conditions yourself and surf within your ability.</p></div>'
-        '</div></div></footer>'
+        '</div><div class="foot-credits"><h2 class="foot-h">Photos</h2>'
+        '<p>From Wikimedia Commons, used under Creative Commons licences.</p><ul class="plain">%s</ul></div>'
+        '</div></footer>'
         % (esc(s["waves"]), esc(s["tides"]), esc(s["forecast"]), esc(payload["repo_url"]),
-           esc(payload["site_url"].rstrip("/") + "/"))
+           esc(payload["site_url"].rstrip("/") + "/"), _photo_credits(payload))
     )
 
 
-def _shell(title, description, body, prefix, payload, extra_class=""):
+def _og_image(payload, slug):
+    p = media.photo(slug)
+    if not p:
+        return ""
+    url = "%s/assets/img/%s" % (payload["site_url"].rstrip("/"), p["file"])
+    return '<meta property="og:image" content="%s"><meta name="twitter:card" content="summary_large_image">' % esc(url)
+
+
+def _shell(title, description, body, prefix, payload, extra_class="", og_slug=None):
     return (
         '<!doctype html><html lang="en"><head>'
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -139,14 +192,14 @@ def _shell(title, description, body, prefix, payload, extra_class=""):
         '<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">'
         '<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">'
         '<meta property="og:title" content="%s"><meta property="og:description" content="%s">'
-        '<meta property="og:type" content="website">'
+        '<meta property="og:type" content="website">%s'
         '<link rel="icon" href="%s">%s'
         '<link rel="stylesheet" href="%sassets/style.css"></head>'
         '<body class="%s"><a class="skip" href="#main">Skip to content</a>%s'
         '<main id="main">%s</main>%s'
         '<div id="tip" class="tip" role="tooltip" hidden></div>'
         '<script src="%sassets/site.js" defer></script></body></html>'
-        % (esc(title), esc(description), esc(title), esc(description), _FAVICON, _THEME_BOOT,
+        % (esc(title), esc(description), esc(title), esc(description), _og_image(payload, og_slug), _FAVICON, _THEME_BOOT,
            prefix, esc(extra_class), _header(prefix), body, _footer(payload), prefix)
     )
 
@@ -173,12 +226,13 @@ def _spot_row(spot):
                       % (esc(board["label"]), esc(board["why"])))
     words_line = ", ".join(x for x in (c["words"]["size"], c["words"]["power"]) if x)
     return (
-        '<article class="row"><div class="row-name"><h3><a href="spots/%(slug)s/">%(name)s</a></h3>'
+        '<article class="row">%(thumb)s<div class="row-name"><h3><a href="spots/%(slug)s/">%(name)s</a></h3>'
         '<p class="muted">%(area)s</p></div>'
         '<div class="row-rate">%(chip)s</div>'
         '<div class="row-body"><p class="cond">%(cond)s</p><p class="words">%(words)s</p>%(board)s</div>'
         '<div class="row-when"><p>%(when)s</p></div></article>'
         % {"slug": esc(spot["slug"]), "name": esc(spot["name"]), "area": esc(spot["area"]),
+           "thumb": _thumb(spot["slug"], ""),
            "chip": chip(spot["rating"], spot["band"], spot["label"], "chip-lg"),
            "cond": esc(cond_line(c)), "words": esc(words_line[:1].upper() + words_line[1:]),
            "board": board_html, "when": esc(window_text(spot))}
@@ -289,12 +343,14 @@ def index_page(payload):
             '<a class="hero-fig" href="spots/%s/"><span class="fig-num">%.1f</span>'
             '<span class="fig-meta">%s<span class="fig-name">%s</span></span></a>'
             % (esc(lead["slug"]), lead["rating"], chip(lead["rating"], lead["band"], lead["label"], "chip-pill"), esc(lead["name"])))
+    bg, credit = _hero_bg(media.HERO_SLUG, "")
     hero = (
-        '<section class="hero"><div class="wrap hero-in"><div class="hero-text">'
+        '<section class="hero%s">%s<div class="wrap hero-in"><div class="hero-text">'
         '<p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · '
-        'Live NOAA buoys, tides and a 7-day forecast</p></div>%s</div></section>'
-        % (esc(h["kicker"]), esc(h["title"]), esc(h["sub"]), esc(payload["generated"]), esc(payload["generated_label"]), figure)
+        'Live NOAA buoys, tides and a 7-day forecast</p></div>%s</div>%s</section>'
+        % (" has-photo" if bg else "", bg, esc(h["kicker"]), esc(h["title"]), esc(h["sub"]),
+           esc(payload["generated"]), esc(payload["generated_label"]), figure, credit)
     )
     ranked = "".join(_spot_row(spots[slug]) for slug in payload["ranking"])
     now_sec = (
@@ -345,7 +401,7 @@ def index_page(payload):
     )
     return _shell("Swell Check — surf conditions for North County San Diego",
                   "Live surf conditions, a 7-day outlook and opt-in alerts for Swami's, Grandview, Beacon's, Blacks and Oceanside Harbor.",
-                  hero + now_sec + week + boards + alerts + how, "", payload, "home")
+                  hero + now_sec + week + boards + alerts + how, "", payload, "home", media.HERO_SLUG)
 
 
 def spot_page(spot, payload):
@@ -365,13 +421,15 @@ def spot_page(spot, payload):
     buoy = spot.get("buoy")
     buoy_txt = ("Live reading from NOAA buoy %s, %d min old%s." % (buoy["id"], buoy["age_minutes"], " (stale — showing the model)" if buoy["stale"] else "")
                 if buoy else "No buoy reading right now — showing the forecast model.")
+    bg, credit = _hero_bg(spot["slug"], "../../", decorative=False)
     hero = (
-        '<section class="spot-hero"><div class="wrap"><p class="crumb"><a href="../../">← All spots</a></p>'
+        '<section class="spot-hero%s">%s<div class="wrap"><p class="crumb"><a href="../../">← All spots</a></p>'
         '<div class="spot-hero-in"><div><p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s</p></div>'
-        '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div></section>'
-        % (esc(spot["area"]), esc(spot["name"]), esc(spot["notes"]), esc(payload["generated"]), esc(payload["generated_label"]),
-           esc(buoy_txt), spot["rating"], chip(spot["rating"], spot["band"], spot["label"], "chip-pill"))
+        '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div>%s</section>'
+        % (" has-photo" if bg else "", bg, esc(spot["area"]), esc(spot["name"]), esc(spot["notes"]),
+           esc(payload["generated"]), esc(payload["generated_label"]),
+           esc(buoy_txt), spot["rating"], chip(spot["rating"], spot["band"], spot["label"], "chip-pill"), credit)
     )
     now_sec = '<section class="sec"><div class="wrap"><h2>Right now</h2><dl class="stats">%s</dl></div></section>' % stats
     today = (
@@ -427,7 +485,7 @@ def spot_page(spot, payload):
     body = hero + now_sec + today + week + bring + likes + alerts
     return _shell("%s — Swell Check" % spot["name"],
                   "Live conditions, today's best window and a 7-day outlook for %s, %s." % (spot["name"], spot["area"]),
-                  body, "../../", payload, "spot")
+                  body, "../../", payload, "spot", spot["slug"])
 
 
 def not_found_page(payload):

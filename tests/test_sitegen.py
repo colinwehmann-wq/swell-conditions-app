@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 import sitegen
-from sitegen import render
+from sitegen import media, render
 from sources import boards
 from sources import evaluate as E
 
@@ -157,6 +157,75 @@ class Render(unittest.TestCase):
         page = render.not_found_page(payload)
         base = re.sub(r"^https?://[^/]+", "", config.SITE_URL).rstrip("/") + "/"
         self.assertIn('href="%sassets/style.css"' % base, page)
+
+
+class Photos(unittest.TestCase):
+    IMG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "sitegen", "assets", "img")
+
+    def test_every_spot_has_a_photo_and_a_full_credit(self):
+        for cfg in config.SPOTS:
+            p = media.photo(cfg["slug"])
+            self.assertIsNotNone(p, cfg["slug"])
+            for key in ("file", "w", "h", "pos", "alt", "author", "licence", "source"):
+                self.assertTrue(p[key], "%s.%s" % (cfg["slug"], key))
+            self.assertTrue(p["source"].startswith("https://commons.wikimedia.org/"))
+            self.assertTrue(p["licence"][1].startswith("https://creativecommons.org/"))
+            self.assertIn(p["licence"][0], media.credit_text(p))
+
+    def test_photo_files_exist_and_stay_web_sized(self):
+        for slug, p in media.PHOTOS.items():
+            path = os.path.join(self.IMG_DIR, p["file"])
+            self.assertTrue(os.path.exists(path), path)
+            self.assertLess(os.path.getsize(path), 600 * 1024, "%s is too heavy for a web page" % p["file"])
+
+    def test_no_raw_downloads_are_left_in_the_assets(self):
+        self.assertEqual([f for f in os.listdir(self.IMG_DIR) if f.startswith("raw-")], [])
+
+    def test_home_hero_and_thumbnails(self):
+        now = at(0, 10)
+        payload = sitegen.make_payload(make_inputs(now, spots=(0, 1, 2, 3, 4)), now)
+        index = render.index_page(payload)
+        hero = media.PHOTOS[media.HERO_SLUG]["file"]
+        self.assertIn('class="hero has-photo"', index)
+        self.assertIn('src="assets/img/%s"' % hero, index)
+        self.assertEqual(index.count('class="row-photo"'), 5)
+        # thumbnails sit beside a text heading, so they're decorative; they must not add noise for screen readers
+        self.assertEqual(index.count('class="row-photo" href="spots/'), 5)
+        self.assertNotIn('alt="Surfers', index.split('class="rows"')[1])
+
+    def test_spot_hero_uses_that_spots_photo_with_alt_text(self):
+        now = at(0, 10)
+        payload = sitegen.make_payload(make_inputs(now), now)
+        spot = payload["spots"][0]
+        p = media.PHOTOS[spot["slug"]]
+        page = render.spot_page(spot, payload)
+        self.assertIn('src="../../assets/img/%s"' % p["file"], page)
+        self.assertIn('alt="%s"' % render.esc(p["alt"]), page)
+
+    def test_credits_are_shown_on_the_hero_and_in_the_footer(self):
+        now = at(0, 10)
+        payload = sitegen.make_payload(make_inputs(now, spots=(0, 1, 2, 3, 4)), now)
+        index = render.index_page(payload)
+        self.assertIn('class="photo-credit"', index)
+        for p in media.PHOTOS.values():
+            self.assertIn(p["author"], index)
+            self.assertIn(p["licence"][1], index)
+
+    def test_share_preview_image_is_absolute(self):
+        now = at(0, 10)
+        payload = sitegen.make_payload(make_inputs(now), now)
+        index = render.index_page(payload)
+        self.assertIn('property="og:image" content="%s/assets/img/%s"'
+                      % (config.SITE_URL.rstrip("/"), media.PHOTOS[media.HERO_SLUG]["file"]), index)
+        self.assertNotIn("og:image", render.not_found_page(payload))
+
+    def test_build_copies_the_photos(self):
+        now = at(0, 10)
+        with tempfile.TemporaryDirectory() as out:
+            sitegen.build(make_inputs(now), now, out)
+            for p in media.PHOTOS.values():
+                self.assertTrue(os.path.exists(os.path.join(out, "assets", "img", p["file"])), p["file"])
 
 
 class Build(unittest.TestCase):

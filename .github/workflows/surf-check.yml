@@ -1,6 +1,9 @@
 name: surf check
 
 # Runs in GitHub's cloud on a schedule — your Mac can be off, asleep, anywhere.
+# Each run (1) checks conditions and sends any alerts, then (2) rebuilds the public
+# website and deploys it to GitHub Pages.
+#
 # Cron is UTC. Pacific is UTC-7 (PDT, Mar–Nov) / UTC-8 (PST, Nov–Mar), so each
 # local check is scheduled twice, an hour apart, to land near the right time
 # year-round. GitHub's scheduler can run 5–20 min late under load.
@@ -13,6 +16,8 @@ on:
     - cron: "30 17 * * *"   # 10:30 PDT / 09:30 PST  — mid-morning
     - cron: "0 22 * * *"    # 15:00 PDT / 14:00 PST  — afternoon
     - cron: "0 23 * * *"    # 16:00 PDT / 15:00 PST
+  push:
+    branches: [main]         # redeploy the site as soon as a change is merged
   workflow_dispatch:
     inputs:
       force:
@@ -23,13 +28,17 @@ on:
         description: "Also send the digest — for testing (it fires automatically on the 05:15 run)"
         type: boolean
         default: false
+      publish_public:
+        description: "Also post to the PUBLIC website-subscriber topics (off by default so tests don't spam them)"
+        type: boolean
+        default: false
 
 concurrency:
   group: surf-check          # never let two runs overlap (they share cached state)
   cancel-in-progress: false
 
 permissions:
-  contents: read             # nothing is written back to the repo any more
+  contents: read             # nothing is written back to the repo
 
 jobs:
   check:
@@ -46,12 +55,14 @@ jobs:
           key: surf-state-${{ github.run_id }}
           restore-keys: surf-state-
 
-      - name: Run surf check
+      - name: Run surf check and build site
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}   # optional: healthchecks.io ping URL
+          # Public (website opt-in) topics only get posts from scheduled runs, or on request.
+          SURF_PUBLISH_PUBLIC: ${{ (github.event_name == 'schedule' || inputs.publish_public) && '1' || '' }}
           # SURF_WEBHOOK_URL: ${{ secrets.SURF_WEBHOOK_URL }}
-        run: python3 check.py --quiet ${{ (github.event.schedule == '15 12 * * *' || inputs.digest) && '--digest' || '' }} ${{ inputs.force && '--force' || '' }}
+        run: python3 check.py --quiet --site _site ${{ (github.event.schedule == '15 12 * * *' || inputs.digest) && '--digest' || '' }} ${{ inputs.force && '--force' || '' }}
 
       - name: Save alert state
         if: always()
@@ -59,3 +70,25 @@ jobs:
         with:
           path: .state.json
           key: surf-state-${{ github.run_id }}
+
+      - name: Package the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write           # publish to GitHub Pages
+      id-token: write        # verify the deploy came from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

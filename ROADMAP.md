@@ -28,14 +28,22 @@ formatters + state I/O).
   footer surfaces "last GO alert: N days ago" so a flat stretch doesn't look
   like a failure. Optional `HEALTHCHECK_URL` ping for external monitoring.
 - [x] **Time-aware digest** — "Morning / Midday / Evening check".
-- [ ] End the PAT dance — `gh auth login` or GitHub Desktop (token expires Oct 8).
-- [ ] Disable the local LaunchAgent (redundant with the cloud runner).
+- [ ] Move pushes off hand-pasted personal access tokens — `gh auth login` or
+  GitHub Desktop.
+- [x] Retired the local LaunchAgent (redundant with the cloud runner); it remains
+  as an optional template, see `SCHEDULING.md`.
 
 ## Tier 2 — real added value
 
-- [ ] **Multi-day outlook.** Open-Meteo gives 7 days free. Add a "this week"
-  section to the digest: best day, its window, the size/period trend. Turns the
-  tool from "go now?" into "plan your week" — the actual high-value use for surf.
+- [x] **Multi-day outlook.** A 7-day outlook per spot (best hour, window, size
+  range, board pick, confidence that fades with lead time). Lives on the public
+  website rather than in the digest. Still to do: surface it in the digest too.
+- [x] **Public website.** Static site on GitHub Pages, rebuilt by the same workflow
+  that checks conditions: ranked live conditions, hour-by-hour chart, 7-day matrix,
+  board recommender, and opt-in alerts via public per-spot ntfy topics.
+- [ ] **Website v2.** Per-user thresholds and email/web-push opt-in need a small
+  backend (stored subscriptions, unsubscribe links, abuse handling) — deliberately
+  out of scope for v1, which keeps the project stateless and data-free.
 - [ ] **Feedback loop.** `check.py --rate <spot> <1-10>` after a session; append
   every evaluation + the real rating to a log; a `tune` script that reports where
   the model over/under-calls. Adjust `WEIGHTS` / thresholds from data, not vibes.

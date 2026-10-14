@@ -12,16 +12,28 @@ def _ascii(text):
     return text.encode("ascii", "ignore").decode("ascii").strip() or "Surf alert"
 
 
-def _ntfy(title, body):
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic:
-        return
+def _publish_public():
+    """Public (website opt-in) topics are only posted to when explicitly enabled —
+    the cloud workflow sets this, local test runs don't."""
+    return os.environ.get("SURF_PUBLISH_PUBLIC", "").strip().lower() in ("1", "true", "yes")
+
+
+def _ntfy(title, body, public_topics=(), click=None):
     server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
-    try:
-        http.post("%s/%s" % (server, topic), body=body,
-                  headers={"Title": _ascii(title), "Tags": "ocean", "Priority": "high"})
-    except Exception as e:  # noqa: BLE001 - best effort
-        print("  ! ntfy failed: %s" % e)
+    topics = []
+    private = os.environ.get("NTFY_TOPIC", "").strip()
+    if private:
+        topics.append(private)
+    if public_topics and _publish_public():
+        topics.extend(t for t in public_topics if t)
+    headers = {"Title": _ascii(title), "Tags": "ocean", "Priority": "high"}
+    if click:
+        headers["Click"] = click
+    for topic in topics:
+        try:
+            http.post("%s/%s" % (server, topic), body=body, headers=headers)
+        except Exception as e:  # noqa: BLE001 - best effort
+            print("  ! ntfy failed (%s): %s" % (topic, e))
 
 
 def _webhook(title, body):
@@ -48,8 +60,8 @@ def _macos(title, body):
         pass
 
 
-def send(title, body):
+def send(title, body, public_topics=(), click=None):
     print("\n>>> NOTIFY: %s\n%s\n" % (title, body))
-    _ntfy(title, body)
+    _ntfy(title, body, public_topics=public_topics, click=click)
     _webhook(title, body)
     _macos(title, body)

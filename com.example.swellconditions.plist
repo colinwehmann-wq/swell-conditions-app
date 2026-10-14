@@ -3,16 +3,16 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.colinwehmann.swellconditions</string>
+    <string>com.example.swellconditions</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
-        <string>/Users/colinwehmann/Swell Conditions App/run.sh</string>
+        <string>/path/to/Swell Conditions App/run.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/colinwehmann/Swell Conditions App</string>
+    <string>/path/to/Swell Conditions App</string>
 
     <!-- Local clock times. Fires at each; if the Mac was asleep, it runs on wake. -->
     <key>StartCalendarInterval</key>
@@ -35,8 +35,8 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/colinwehmann/Swell Conditions App/logs/launchd.log</string>
+    <string>/path/to/Swell Conditions App/logs/launchd.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/colinwehmann/Swell Conditions App/logs/launchd.log</string>
+    <string>/path/to/Swell Conditions App/logs/launchd.log</string>
 </dict>
 </plist>

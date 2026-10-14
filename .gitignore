@@ -1,4 +1,6 @@
 .state.json
+_site/
+.env
 logs/
 __pycache__/
 *.pyc

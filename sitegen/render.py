@@ -1,0 +1,438 @@
+"""HTML for the public site.
+
+Plain string templates, no dependencies. Every value that came from data goes
+through `esc`. Ratings are a *status* encoding (good / okay / poor), so each one
+ships as icon + number + label, never colour alone.
+"""
+import datetime
+import html
+from urllib.parse import urlparse
+
+_CLS = {"green": "good", "yellow": "ok", "red": "poor"}
+_ICO = {"green": "✓", "yellow": "!", "red": "✕"}
+
+_BOARD_BLURBS = [
+    ("Longboard", "Small or mushy waves. Paddle power and glide do the work."),
+    ("Fish", "Waist-high and soft, or bumpy. Short, wide and forgiving."),
+    ("Shortboard", "Solid, workable waves. The everyday all-rounder."),
+    ("Performance board", "Chest-high or bigger, long-period and clean. Hollow, powerful faces."),
+]
+
+_THEME_BOOT = ("<script>(function(){try{var t=localStorage.getItem('theme');"
+               "if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t)}}"
+               "catch(e){}})()</script>")
+
+_FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
+            "%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%8A%3C/text%3E%3C/svg%3E")
+
+_IOS = "https://apps.apple.com/us/app/ntfy/id1625396347"
+_ANDROID = "https://play.google.com/store/apps/details?id=io.heckel.ntfy"
+
+
+# ------------------------------------------------------------------------ helpers
+
+def esc(v):
+    return html.escape("" if v is None else str(v), quote=True)
+
+
+def _dt(iso):
+    return datetime.datetime.fromisoformat(iso)
+
+
+def _clock(iso):
+    return _dt(iso).strftime("%I:%M %p").lstrip("0")
+
+
+def _hour(iso):
+    return _dt(iso).strftime("%I %p").lstrip("0")
+
+
+def _short_hour(iso):
+    d = _dt(iso)
+    return "%d%s" % (d.hour % 12 or 12, "a" if d.hour < 12 else "p")
+
+
+def _f(x):
+    if x is None:
+        return "?"
+    s = "%.1f" % x
+    return s[:-2] if s.endswith(".0") else s
+
+
+def _range(lo, hi):
+    if lo is None or hi is None:
+        return "—"
+    return "%s ft" % _f(lo) if _f(lo) == _f(hi) else "%s–%s ft" % (_f(lo), _f(hi))
+
+
+def chip(rating, band, label, size=""):
+    return ('<span class="chip chip-%s %s"><span class="chip-ico" aria-hidden="true">%s</span>'
+            '<span class="chip-num">%.1f</span><span class="chip-lbl">%s</span></span>'
+            % (_CLS[band], size, _ICO[band], rating, esc(label)))
+
+
+def cond_line(c):
+    parts = []
+    if c.get("height_ft") is not None:
+        size = "%s ft" % _f(c["height_ft"])
+        if c.get("period_s") is not None:
+            size += " at %d s" % c["period_s"]
+        if c.get("swell_dir"):
+            size += " from the %s" % c["swell_dir"]
+        parts.append(size)
+    if c.get("wind_kn") is not None:
+        wind = "%d kt %s" % (c["wind_kn"], c.get("wind_dir") or "")
+        parts.append(wind.strip() + (" (glassy)" if c["wind_kn"] < 4 else ""))
+    tide = c.get("words", {}).get("tide")
+    if tide:
+        parts.append(tide)
+    return " · ".join(parts)
+
+
+def window_text(spot):
+    w = spot.get("window")
+    if not w:
+        return "No window worth it in the next day"
+    return "Best %s: %s–%s, peak %s" % (w.get("day") or "today", _hour(w["start"]), _hour(w["end"]), _clock(w["peak"]))
+
+
+# ------------------------------------------------------------------------- shell
+
+def _header(prefix):
+    return (
+        '<header class="top"><div class="wrap top-in">'
+        '<a class="brand" href="%(p)s"><span class="brand-mark" aria-hidden="true">≈</span>Swell Check</a>'
+        '<nav class="nav" aria-label="Primary">'
+        '<a href="%(p)s#now">Now</a><a href="%(p)s#week">Week</a>'
+        '<a href="%(p)s#alerts">Alerts</a><a href="%(p)s#how">How it works</a></nav>'
+        '<button class="theme" type="button" aria-label="Switch colour theme" data-theme-toggle>'
+        '<span aria-hidden="true">◐</span></button>'
+        '</div></header>' % {"p": prefix or "./"}
+    )
+
+
+def _footer(payload):
+    s = payload["sources"]
+    return (
+        '<footer class="foot"><div class="wrap">'
+        '<div class="foot-grid">'
+        '<div><h2 class="foot-h">Data</h2><ul class="plain">'
+        '<li>%s</li><li>%s</li><li>%s</li></ul></div>'
+        '<div><h2 class="foot-h">About</h2>'
+        '<p>An open-source project. The scoring, the tests and the roadmap are all in the '
+        '<a href="%s">repository</a>. The raw numbers behind every page are in '
+        '<a href="%sdata/latest.json">latest.json</a>.</p></div>'
+        '<div><h2 class="foot-h">Please note</h2>'
+        '<p>Informational only. Forecasts are wrong, buoys go offline, and the ocean is dangerous — '
+        'check conditions yourself and surf within your ability.</p></div>'
+        '</div></div></footer>'
+        % (esc(s["waves"]), esc(s["tides"]), esc(s["forecast"]), esc(payload["repo_url"]),
+           esc(payload["site_url"].rstrip("/") + "/"))
+    )
+
+
+def _shell(title, description, body, prefix, payload, extra_class=""):
+    return (
+        '<!doctype html><html lang="en"><head>'
+        '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>%s</title><meta name="description" content="%s">'
+        '<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">'
+        '<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">'
+        '<meta property="og:title" content="%s"><meta property="og:description" content="%s">'
+        '<meta property="og:type" content="website">'
+        '<link rel="icon" href="%s">%s'
+        '<link rel="stylesheet" href="%sassets/style.css"></head>'
+        '<body class="%s"><a class="skip" href="#main">Skip to content</a>%s'
+        '<main id="main">%s</main>%s'
+        '<div id="tip" class="tip" role="tooltip" hidden></div>'
+        '<script src="%sassets/site.js" defer></script></body></html>'
+        % (esc(title), esc(description), esc(title), esc(description), _FAVICON, _THEME_BOOT,
+           prefix, esc(extra_class), _header(prefix), body, _footer(payload), prefix)
+    )
+
+
+# --------------------------------------------------------------------- components
+
+def subscribe_buttons(name, ntfy, label=None):
+    return (
+        '<div class="subs" role="group" aria-label="Subscribe to %(n)s alerts">'
+        '<a class="btn btn-primary" href="%(app)s">%(l)s</a>'
+        '<a class="btn" href="%(web)s" rel="noopener" target="_blank">Subscribe on the web</a>'
+        '<button class="btn btn-ghost" type="button" data-copy="%(t)s">Copy topic</button></div>'
+        % {"n": esc(name), "app": esc(ntfy["app_url"]), "web": esc(ntfy["web_url"]),
+           "t": esc(ntfy["topic"]), "l": esc(label or "Open in ntfy app")}
+    )
+
+
+def _spot_row(spot):
+    c = spot["now"]
+    board = spot.get("board")
+    board_html = ""
+    if board:
+        board_html = ('<p class="board"><span class="tag">Bring</span> <strong>%s</strong> — %s</p>'
+                      % (esc(board["label"]), esc(board["why"])))
+    words_line = ", ".join(x for x in (c["words"]["size"], c["words"]["power"]) if x)
+    return (
+        '<article class="row"><div class="row-name"><h3><a href="spots/%(slug)s/">%(name)s</a></h3>'
+        '<p class="muted">%(area)s</p></div>'
+        '<div class="row-rate">%(chip)s</div>'
+        '<div class="row-body"><p class="cond">%(cond)s</p><p class="words">%(words)s</p>%(board)s</div>'
+        '<div class="row-when"><p>%(when)s</p></div></article>'
+        % {"slug": esc(spot["slug"]), "name": esc(spot["name"]), "area": esc(spot["area"]),
+           "chip": chip(spot["rating"], spot["band"], spot["label"], "chip-lg"),
+           "cond": esc(cond_line(c)), "words": esc(words_line[:1].upper() + words_line[1:]),
+           "board": board_html, "when": esc(window_text(spot))}
+    )
+
+
+def _matrix(payload):
+    spots = payload["spots"]
+    dates = sorted({d["date"] for s in spots for d in s["outlook"]})
+    if not dates:
+        return '<p class="muted">The forecast outlook isn\'t available right now.</p>'
+    first = {d["date"]: d for s in spots for d in s["outlook"]}
+    head = "".join(
+        '<th scope="col"><span class="d-w">%s</span><span class="d-d">%s</span></th>'
+        % (esc(first[d]["weekday"]), esc(first[d]["day"])) for d in dates)
+    rows = []
+    for s in spots:
+        by_date = {d["date"]: d for d in s["outlook"]}
+        cells = []
+        for d in dates:
+            e = by_date.get(d)
+            if not e:
+                cells.append('<td class="cell-empty"><span class="muted">—</span></td>')
+                continue
+            rng = _range(*e["height_range_ft"])
+            board = (e.get("board") or {}).get("label", "")
+            tip = "|".join([
+                "%s · %s %s" % (s["name"], e["weekday"], e["day"]),
+                "%.1f / 10 — %s" % (e["rating"], e["label"]),
+                "%s · peak ~%s" % (rng, _clock(e["peak"])),
+                "Bring: %s" % board if board else "",
+                "%s confidence" % e["confidence"].capitalize(),
+            ])
+            aria = "%s, %s %s: %s, %.1f out of 10, %s." % (s["name"], e["weekday"], e["day"], e["label"], e["rating"], rng)
+            cells.append(
+                '<td><a class="cell" href="spots/%s/#week" data-tip="%s" aria-label="%s">%s'
+                '<span class="cell-size">%s</span></a></td>'
+                % (esc(s["slug"]), esc(tip), esc(aria), chip(e["rating"], e["band"], e["label"], "chip-sm"), esc(rng)))
+        rows.append('<tr><th scope="row"><a href="spots/%s/">%s</a></th>%s</tr>' % (esc(s["slug"]), esc(s["name"]), "".join(cells)))
+    return (
+        '<div class="matrix-wrap"><table class="matrix"><caption class="sr">Best rating by spot and day, '
+        'with the expected size range</caption><thead><tr><th scope="col"><span class="sr">Spot</span></th>%s</tr></thead>'
+        '<tbody>%s</tbody></table></div>' % (head, "".join(rows))
+    )
+
+
+def _legend():
+    items = [("green", "Good", "above 7.5"), ("yellow", "Okay", "5 to 7.5"), ("red", "Poor", "below 5")]
+    return (
+        '<ul class="legend" aria-label="Rating key">%s</ul>'
+        '<p class="note">A failed hard gate — blown-out wind, too small, too short a period — caps the day at Poor, '
+        'however good the swell looks. Beyond day 3 the forecast is a rough guide, not a promise.</p>'
+        % "".join('<li>%s <span class="muted">%s</span></li>' % (chip({"green": 9, "yellow": 6.5, "red": 3}[b], b, l, "chip-sm"), r)
+                  for b, l, r in items)
+    )
+
+
+def timeline_chart(spot, now_iso):
+    rows = spot["timeline"]
+    if not rows:
+        return '<p class="muted">No daylight hours to chart for today.</p>'
+    now = _dt(now_iso)
+    peak_i = max(range(len(rows)), key=lambda i: rows[i]["rating"])
+    cols, trs = [], []
+    for i, r in enumerate(rows):
+        t = _dt(r["time"])
+        is_now = t <= now < t + datetime.timedelta(hours=1)
+        pct = max(6.0, min(100.0, r["rating"] * 10.0))
+        size = "%s ft" % _f(r["height_ft"]) if r["height_ft"] is not None else "—"
+        wind = "%d kt" % r["wind_kn"] if r["wind_kn"] is not None else "—"
+        per = "%d s" % r["period_s"] if r["period_s"] is not None else "—"
+        tide = "%s ft" % _f(r["tide_ft"]) if r["tide_ft"] is not None else "—"
+        tip = "|".join(["%s%s" % (_hour(r["time"]), " · now" if is_now else ""),
+                        "%.1f / 10 — %s" % (r["rating"], r["label"]),
+                        "%s at %s" % (size, per), "Wind %s" % wind, "Tide %s" % tide])
+        aria = "%s: %s, %.1f out of 10, %s at %s, wind %s." % (_hour(r["time"]), r["label"], r["rating"], size, per, wind)
+        val = '<span class="val">%.1f</span>' % r["rating"] if i == peak_i else ""
+        cols.append(
+            '<div class="col%s" tabindex="0" role="img" data-tip="%s" aria-label="%s">'
+            '<div class="slot"><div class="bar b-%s" style="height:%.0f%%">%s</div></div>'
+            '<div class="xl">%s</div></div>'
+            % (" is-now" if is_now else "", esc(tip), esc(aria), _CLS[r["band"]], pct, val, esc(_short_hour(r["time"]))))
+        trs.append("<tr><th scope=\"row\">%s</th><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+                   % (esc(_hour(r["time"])), "%.1f (%s)" % (r["rating"], esc(r["label"])), esc(size), esc(per), esc(wind), esc(tide)))
+    grid = "".join('<i class="grid" style="--y:%s"></i>' % y for y in ("0", "0.5", "1"))
+    yaxis = "".join('<span style="--y:%s">%s</span>' % (y, lab) for y, lab in (("0", "10"), ("0.5", "5"), ("1", "0")))
+    return (
+        '<figure class="chart"><div class="plot"><div class="yaxis" aria-hidden="true">%s</div>'
+        '<div class="cols">%s%s</div></div>'
+        '<figcaption class="muted">Rating (1–10) for each daylight hour. Hover or focus a bar for the details.</figcaption>'
+        '</figure>'
+        '<details class="tv"><summary>View as a table</summary><div class="tbl-wrap"><table class="tbl">'
+        '<thead><tr><th scope="col">Hour</th><th scope="col">Rating</th><th scope="col">Size</th>'
+        '<th scope="col">Period</th><th scope="col">Wind</th><th scope="col">Tide</th></tr></thead>'
+        '<tbody>%s</tbody></table></div></details>' % (yaxis, grid, "".join(cols), "".join(trs))
+    )
+
+
+# -------------------------------------------------------------------------- pages
+
+def index_page(payload):
+    h = payload["headline"]
+    spots = {s["slug"]: s for s in payload["spots"]}
+    lead = spots.get(h.get("slug"))
+    figure = ""
+    if lead:
+        figure = (
+            '<a class="hero-fig" href="spots/%s/"><span class="fig-num">%.1f</span>'
+            '<span class="fig-meta">%s<span class="fig-name">%s</span></span></a>'
+            % (esc(lead["slug"]), lead["rating"], chip(lead["rating"], lead["band"], lead["label"], "chip-pill"), esc(lead["name"])))
+    hero = (
+        '<section class="hero"><div class="wrap hero-in"><div class="hero-text">'
+        '<p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
+        '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · '
+        'Live NOAA buoys, tides and a 7-day forecast</p></div>%s</div></section>'
+        % (esc(h["kicker"]), esc(h["title"]), esc(h["sub"]), esc(payload["generated"]), esc(payload["generated_label"]), figure)
+    )
+    ranked = "".join(_spot_row(spots[slug]) for slug in payload["ranking"])
+    now_sec = (
+        '<section id="now" class="sec"><div class="wrap"><h2>Right now</h2>'
+        '<p class="sec-lede">Five North County San Diego breaks, ranked by how good they are this minute.</p>'
+        '<div class="rows">%s</div></div></section>' % ranked
+    )
+    week = (
+        '<section id="week" class="sec"><div class="wrap"><h2>The week ahead</h2>'
+        '<p class="sec-lede">The best daylight hour for each spot, each day. Tap a cell for the details.</p>'
+        '%s%s</div></section>' % (_matrix(payload), _legend())
+    )
+    boards = (
+        '<section id="boards" class="sec"><div class="wrap"><h2>Which board to bring</h2>'
+        '<p class="sec-lede">Every spot above comes with a pick. It\'s a rule of thumb built from the size, '
+        'the period and the wind — and it shows its reasoning.</p><dl class="boards">%s</dl></div></section>'
+        % "".join('<div><dt>%s</dt><dd>%s</dd></div>' % (esc(n), esc(b)) for n, b in _BOARD_BLURBS)
+    )
+    sub_rows = "".join(
+        '<li><div><strong>%s</strong><span class="muted"> %s</span></div>%s</li>'
+        % (esc(s["name"]), esc(s["area"]), subscribe_buttons(s["name"], s["ntfy"]))
+        for s in payload["spots"])
+    alerts = (
+        '<section id="alerts" class="sec"><div class="wrap"><h2>Get the alerts</h2>'
+        '<p class="sec-lede">A notification only when a spot is genuinely worth paddling out for — '
+        'plus a heads-up when a good window is about to open. No account, no email.</p>'
+        '<ol class="steps"><li><strong>Get ntfy.</strong> A free, open-source notification app: '
+        '<a href="%s" rel="noopener">iPhone</a> · <a href="%s" rel="noopener">Android</a> · or use it in the browser.</li>'
+        '<li><strong>Pick your breaks.</strong> Tap a button below. It opens the app on that spot\'s channel.</li>'
+        '<li><strong>That\'s it.</strong> Unsubscribe any time from inside the app.</li></ol>'
+        '<ul class="sub-list">%s<li><div><strong>Daily digest</strong><span class="muted"> all five spots, every morning</span></div>%s</li></ul>'
+        '<p class="note">Privacy: this site never sees who subscribes. The trade-off is that ntfy channels are public — '
+        'anyone who knows a channel name can read it or post to it — so treat them as a broadcast, not a private line.</p>'
+        '</div></section>' % (_IOS, _ANDROID, sub_rows, subscribe_buttons("the daily digest", payload["digest"], "Open digest in ntfy"))
+    )
+    how = (
+        '<section id="how" class="sec"><div class="wrap"><h2>How it works</h2><ol class="how">'
+        '<li><h3>Buoys first</h3><p>Wave size, period and direction come from live NOAA buoy readings. The forecast model is '
+        'calibrated to the buoy, so its trend carries through without its coastal bias — and if a buoy goes offline the system says so '
+        'and falls back to the model.</p></li>'
+        '<li><h3>Score, then gate</h3><p>Height, period, swell direction, wind and tide become a 0–100 score and a 1–10 rating. '
+        'Hard gates sit on top: a great swell with a blown-out wind never reads as good.</p></li>'
+        '<li><h3>Look ahead</h3><p>A 7-day forecast and NOAA tide predictions find each day\'s best hour and any window worth the trip. '
+        'It also warns early when a good window opens before the next check.</p></li>'
+        '<li><h3>Say it plainly</h3><p>Notifications skip the jargon — "chest-high, glassy, low tide going out" — and show their numbers underneath.</p></li>'
+        '</ol><p class="note">Built in dependency-free Python, rebuilt several times a day by GitHub Actions, with a test suite that runs on every change. '
+        '<a href="%s">Read the code and the roadmap.</a></p></div></section>' % esc(payload["repo_url"])
+    )
+    return _shell("Swell Check — surf conditions for North County San Diego",
+                  "Live surf conditions, a 7-day outlook and opt-in alerts for Swami's, Grandview, Beacon's, Blacks and Oceanside Harbor.",
+                  hero + now_sec + week + boards + alerts + how, "", payload, "home")
+
+
+def spot_page(spot, payload):
+    c = spot["now"]
+    board = spot.get("board")
+
+    def stat(label, value, sub=""):
+        return '<div class="stat"><dt>%s</dt><dd>%s</dd><dd class="stat-sub">%s</dd></div>' % (esc(label), esc(value), esc(sub))
+
+    stats = "".join([
+        stat("Size", "%s ft" % _f(c["height_ft"]) if c["height_ft"] is not None else "—", c["words"]["size"]),
+        stat("Period", "%d s" % c["period_s"] if c["period_s"] is not None else "—", c["words"]["power"]),
+        stat("Swell from", c["swell_dir"] or "—", "%d°" % c["swell_dir_deg"] if c["swell_dir_deg"] is not None else ""),
+        stat("Wind", "%d kt %s" % (c["wind_kn"], c["wind_dir"] or "") if c["wind_kn"] is not None else "—", c["words"]["wind"]),
+        stat("Tide", "%s ft" % _f(c["tide_ft"]) if c["tide_ft"] is not None else "—", c["words"]["tide"]),
+    ])
+    buoy = spot.get("buoy")
+    buoy_txt = ("Live reading from NOAA buoy %s, %d min old%s." % (buoy["id"], buoy["age_minutes"], " (stale — showing the model)" if buoy["stale"] else "")
+                if buoy else "No buoy reading right now — showing the forecast model.")
+    hero = (
+        '<section class="spot-hero"><div class="wrap"><p class="crumb"><a href="../../">← All spots</a></p>'
+        '<div class="spot-hero-in"><div><p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
+        '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s</p></div>'
+        '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div></section>'
+        % (esc(spot["area"]), esc(spot["name"]), esc(spot["notes"]), esc(payload["generated"]), esc(payload["generated_label"]),
+           esc(buoy_txt), spot["rating"], chip(spot["rating"], spot["band"], spot["label"], "chip-pill"))
+    )
+    now_sec = '<section class="sec"><div class="wrap"><h2>Right now</h2><dl class="stats">%s</dl></div></section>' % stats
+    today = (
+        '<section id="today" class="sec"><div class="wrap"><h2>%s, hour by hour</h2>'
+        '<p class="sec-lede">%s</p>%s%s</div></section>'
+        % (esc(spot.get("timeline_label", "Today")), esc(window_text(spot)),
+           timeline_chart(spot, payload["generated"]), _legend())
+    )
+    items = []
+    for d in spot["outlook"]:
+        peak_board = (d.get("board") or {}).get("label")
+        w = d.get("window")
+        win = "Window %s–%s" % (_hour(w["start"]), _hour(w["end"])) if w else "No window worth it"
+        lead = "Today" if d["lead_days"] == 0 else "Tomorrow" if d["lead_days"] == 1 else ""
+        items.append(
+            '<li class="wk"><div class="wk-day"><strong>%s</strong> %s<small>%s</small></div>'
+            '<div class="wk-rate">%s</div>'
+            '<div class="wk-body"><p>%s · peaks around %s · %s</p>%s</div>'
+            '<div class="wk-conf muted">%s confidence</div></li>'
+            % (esc(d["weekday"]), esc(d["day"]), esc(lead), chip(d["rating"], d["band"], d["label"], "chip-sm"),
+               esc(_range(*d["height_range_ft"])), esc(_clock(d["peak"])), esc(win),
+               '<p class="board"><span class="tag">Bring</span> %s</p>' % esc(peak_board) if peak_board else "",
+               esc(d["confidence"].capitalize())))
+    week = (
+        '<section id="week" class="sec"><div class="wrap"><h2>The next %d days</h2>'
+        '<p class="sec-lede">Model forecast, nudged to match the live buoy. Confidence drops the further out you look.</p>'
+        '<ol class="week">%s</ol></div></section>' % (len(spot["outlook"]), "".join(items))
+        if items else "")
+    bring = ""
+    if board:
+        bring = (
+            '<section class="sec"><div class="wrap"><h2>What to bring</h2><div class="bring"><p class="bring-name">%s</p>'
+            '<p>%s</p><p class="note">Based on the conditions right now. See <a href="../../#boards">how the picks work</a>.</p></div></div></section>'
+            % (esc(board["label"]), esc(board["why"])))
+    ideal = spot["ideal"]
+    likes = (
+        '<section class="sec"><div class="wrap"><h2>What %s likes</h2><ul class="plain likes">'
+        '<li><strong>Swell:</strong> from the %s to the %s (%d°–%d°)</li>'
+        '<li><strong>Size:</strong> about %s–%s ft is ideal</li>'
+        '<li><strong>Period:</strong> at least %d s, with %d s or more best</li>'
+        '<li><strong>Tide:</strong> %s–%s ft</li>'
+        '<li><strong>Wind:</strong> offshore, or under about %d kt</li></ul></div></section>'
+        % (esc(spot["name"]), esc(ideal["swell_dir"][0]), esc(ideal["swell_dir"][1]),
+           ideal["swell_dir_deg"][0], ideal["swell_dir_deg"][1], _f(ideal["height_ft"][0]), _f(ideal["height_ft"][1]),
+           ideal["period_min_s"], ideal["period_ideal_s"], _f(ideal["tide_ft"][0]), _f(ideal["tide_ft"][1]), ideal["wind_max_kn"])
+    )
+    alerts = (
+        '<section id="alerts" class="sec"><div class="wrap"><h2>Get %s alerts</h2>'
+        '<p class="sec-lede">One notification when %s is worth paddling out for. Needs the free '
+        '<a href="%s" rel="noopener">ntfy</a> app (<a href="%s" rel="noopener">Android</a>) — no account.</p>%s'
+        '<p class="note">ntfy channels are public: anyone who knows the name can read or post to it.</p></div></section>'
+        % (esc(spot["name"]), esc(spot["name"]), _IOS, _ANDROID, subscribe_buttons(spot["name"], spot["ntfy"])))
+    body = hero + now_sec + today + week + bring + likes + alerts
+    return _shell("%s — Swell Check" % spot["name"],
+                  "Live conditions, today's best window and a 7-day outlook for %s, %s." % (spot["name"], spot["area"]),
+                  body, "../../", payload, "spot")
+
+
+def not_found_page(payload):
+    # GitHub Pages serves this at any depth, so asset paths must be absolute.
+    prefix = urlparse(payload["site_url"]).path.rstrip("/") + "/"
+    body = ('<section class="hero"><div class="wrap"><p class="kicker">404</p><h1>That page wiped out.</h1>'
+            '<p class="lede"><a href="%s">Head back to the conditions.</a></p></div></section>' % esc(prefix))
+    return _shell("Not found — Swell Check", "Page not found.", body, prefix, payload)

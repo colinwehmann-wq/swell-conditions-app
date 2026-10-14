@@ -143,6 +143,33 @@ Stdlib `unittest`, no dependencies. Covers the scoring curves, compass-arc
 wraparound, hard gates, window finding, tide interpolation, the next-check clock,
 and NDBC feed parsing. Runs on every push via `.github/workflows/tests.yml`.
 
+## The website
+
+A static site, rebuilt on every scheduled run and deployed to GitHub Pages:
+
+- **Right now** — five breaks ranked by rating, each with a "what to bring" pick
+- **Week ahead** — a 7-day matrix of the best daylight hour per spot, with size ranges
+- **Spot pages** — an hour-by-hour chart (with a table view), the next 7 days, what
+  the break likes, and a subscribe button
+- **Opt-in alerts** — every spot has its own public [ntfy](https://ntfy.sh) topic and
+  there's a daily-digest topic. Visitors tap a button to subscribe; the site never
+  sees who they are. The catch: ntfy topics are public, so anyone who knows a name
+  can read *and post* to it. Names carry a random suffix (see `config.py`) to avoid
+  collisions, and the workflow only publishes to them from scheduled runs.
+- **Open data** — the same numbers are published as `data/latest.json`.
+
+Build it locally (no alerts are sent in `--report` mode):
+
+```bash
+python3 check.py --report --site _site
+python3 -m http.server 8000 --directory _site     # then open http://localhost:8000
+```
+
+**Board picks** come from `sources/boards.py` — a transparent rule of thumb
+(longboard / fish / shortboard / performance board) based on size, period and wind;
+every pick carries a one-line reason. **Enabling Pages:** repo Settings → Pages →
+Source: *GitHub Actions* (the repo must be public on a free plan).
+
 ## Running it automatically
 
 See [`SCHEDULING.md`](SCHEDULING.md).

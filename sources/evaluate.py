@@ -145,7 +145,8 @@ def _conditions(dt, marine_row, wind_row, tide, buoy, use_buoy, calib=None):
             tide.height(dt) if tide else None)
 
 
-def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, calib=None):
+def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, calib=None,
+                   start=None):
     """Hourly scores for daylight hours that are still ahead (or all of a future day).
 
     `allow_buoy` lets the hour nearest `now` use the live buoy reading instead of
@@ -154,7 +155,8 @@ def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, cal
     sunrise, sunset = sun
     if sunrise is None:
         return []
-    dt = max(floor_hour(sunrise), floor_hour(now))
+    first = floor_hour(start) if start is not None else floor_hour(now)
+    dt = max(floor_hour(sunrise), first)
     last = sunset - datetime.timedelta(minutes=45)   # need real daylight left to surf
     fresh_buoy = allow_buoy and bool(buoy) and not (buoy or {}).get("stale", True)
     rows = []
@@ -194,6 +196,70 @@ def _best_window(rows, threshold):
     return best
 
 
+def calibration(now, marine, wind, tide, buoy):
+    """Nudge the wave model onto the live buoy.
+
+    Coastal model points run low and a bit short here, so carry only the model's
+    trend, not its absolute level. Returns {"h_scale", "p_shift"}; identity when
+    there is no fresh buoy.
+    """
+    hour = floor_hour(now)
+    live = _conditions(now, marine.get(hour), wind.get(hour), tide, buoy, use_buoy=True)
+    model = _conditions(now, marine.get(hour), wind.get(hour), tide, buoy, use_buoy=False)
+    calib = {"h_scale": 1.0, "p_shift": 0.0}
+    if buoy and not buoy["stale"] and live[0] and model[0] and model[0] > 0.3:
+        calib["h_scale"] = _clamp(live[0] / model[0], 0.6, 2.0)
+        if live[1] and model[1]:
+            calib["p_shift"] = _clamp(live[1] - model[1], -3.0, 3.0)
+    return calib
+
+
+def timeline(cfg, day, sun, now, buoy, tide, marine, wind, calib):
+    """Hourly scored rows across the whole daylight span of `day` (not just what's left)."""
+    return _daylight_rows(cfg, sun, now, marine, wind, tide, buoy,
+                          allow_buoy=(day == now.date()), calib=calib, start=sun[0])
+
+
+def _day_summary(cfg, day, rows, lead):
+    passing = [r for r in rows if r["gates_ok"]]
+    best = max(passing or rows, key=lambda r: r["score"])
+    heights = [r["cond"][0] for r in rows if r["cond"][0] is not None]
+    return {
+        "date": day,
+        "lead_days": lead,
+        # same rule as the live rating: a failed hard gate caps the day at "red"
+        "rating_score": best["score"] if passing else min(best["score"], RATING_GATE_CAP),
+        "best": best,
+        "window": _best_window(rows, cfg["alert_score_min"]),
+        "height_range_ft": (min(heights), max(heights)) if heights else (None, None),
+        "rows": rows,
+    }
+
+
+def outlook(cfg, now, buoy, tide, marine, wind, sun_by_date, calib, days=7):
+    """One summary per upcoming day: the best daylight hour, a quality window if
+    there is one, and the size range. Today counts only while daylight remains;
+    days with no forecast data are skipped."""
+    out = []
+    today = now.date()
+    for lead in range(0, days + 1):
+        if len(out) >= days:
+            break
+        day = today + datetime.timedelta(days=lead)
+        sun = sun_by_date.get(day)
+        if not sun or sun[0] is None:
+            continue
+        if lead == 0:
+            rows = _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, calib=calib)
+        else:
+            rows = _daylight_rows(cfg, sun, now, marine, wind, tide, buoy,
+                                  allow_buoy=False, calib=calib, start=sun[0])
+        if not rows or all(r["cond"][0] is None for r in rows):
+            continue
+        out.append(_day_summary(cfg, day, rows, lead))
+    return out
+
+
 # ------------------------------------------------------------------------- entry
 
 def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow, next_check=None):
@@ -202,15 +268,7 @@ def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow, n
     now_total, now_sub = score(*now_cond, cfg=cfg)
     now_gates = _gates_ok(now_cond[0], now_cond[1], now_cond[3], now_cond[4], cfg)
 
-    # Calibrate the wave model to the live buoy: coastal model points run low and
-    # a bit short here, so carry only the model's trend, not its absolute level.
-    model_now = _conditions(now, marine.get(floor_hour(now)), wind.get(floor_hour(now)),
-                            tide, buoy, use_buoy=False)
-    calib = {"h_scale": 1.0, "p_shift": 0.0}
-    if buoy and not buoy["stale"] and now_cond[0] and model_now[0] and model_now[0] > 0.3:
-        calib["h_scale"] = _clamp(now_cond[0] / model_now[0], 0.6, 2.0)
-        if now_cond[1] and model_now[1]:
-            calib["p_shift"] = _clamp(now_cond[1] - model_now[1], -3.0, 3.0)
+    calib = calibration(now, marine, wind, tide, buoy)
 
     today_rows = _daylight_rows(cfg, sun_today, now, marine, wind, tide, buoy, calib=calib)
     thr = cfg["alert_score_min"]

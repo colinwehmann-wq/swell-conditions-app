@@ -18,6 +18,24 @@ TIMEZONE = "America/Los_Angeles"
 # GitHub Actions cron, a rough picture of the gaps is enough.
 CHECK_TIMES = ["05:00", "06:00", "07:00", "10:30", "15:00", "16:00"]
 
+# Days of forecast to pull. One more than the 7-day outlook shows, so there are still
+# seven full days to show when today has already gone dark.
+FORECAST_DAYS = 8
+OUTLOOK_DAYS = 7
+
+# --- public website + opt-in notifications ----------------------------------------
+# Visitors subscribe to a public ntfy topic per spot. ntfy topics are not
+# password-protected, so anyone who knows the name can read *and post* — the random
+# suffix just keeps names from colliding with other people's topics.
+SITE_URL = "https://colinwehmann-wq.github.io/swell-conditions-app"
+PUBLIC_TOPIC_BASE = "swellcheck-nc"
+PUBLIC_TOPIC_SUFFIX = "ed10f8"
+
+
+def public_topic(slug):
+    """Public ntfy topic for a spot slug (or "daily" for the morning digest)."""
+    return "%s-%s-%s" % (PUBLIC_TOPIC_BASE, slug, PUBLIC_TOPIC_SUFFIX)
+
 DEFAULTS = {
     # Significant wave height (ft). Outside `ok` = no-go; inside `ideal` = full marks.
     "height_ok_ft":     [2.5, 9.0],
@@ -54,6 +72,8 @@ DEFAULTS = {
 SPOTS = [
     {
         "name": "Swami's",
+        "slug": "swamis",
+        "area": "Encinitas",
         "lat": 33.0361, "lon": -117.2925,
         "buoys": ["46224", "46225"],
         "swell_dir_deg": [190, 315],
@@ -63,6 +83,8 @@ SPOTS = [
     },
     {
         "name": "Grandview",
+        "slug": "grandview",
+        "area": "Leucadia",
         "lat": 33.0581, "lon": -117.3012,
         "buoys": ["46224", "46225"],
         "swell_dir_deg": [195, 315],
@@ -71,6 +93,8 @@ SPOTS = [
     },
     {
         "name": "Beacon's",
+        "slug": "beacons",
+        "area": "Leucadia",
         "lat": 33.0518, "lon": -117.2991,
         "buoys": ["46224", "46225"],
         "swell_dir_deg": [195, 315],
@@ -79,6 +103,8 @@ SPOTS = [
     },
     {
         "name": "Blacks",
+        "slug": "blacks",
+        "area": "La Jolla",
         "lat": 32.8887, "lon": -117.2523,
         "buoys": ["46225", "46224"],
         "swell_dir_deg": [180, 320],     # canyon focuses nearly everything
@@ -89,6 +115,8 @@ SPOTS = [
     },
     {
         "name": "Oceanside Harbor",
+        "slug": "oceanside",
+        "area": "Oceanside",
         "lat": 33.2049, "lon": -117.3936,
         "buoys": ["46224"],
         "swell_dir_deg": [200, 290],     # jetty favors more W in the swell
@@ -100,7 +128,8 @@ SPOTS = [
 
 
 def spot_config(spot):
-    """Merge a SPOTS entry over DEFAULTS."""
+    """Merge a SPOTS entry over DEFAULTS and attach its public ntfy topic."""
     cfg = dict(DEFAULTS)
     cfg.update(spot)
+    cfg["ntfy_topic"] = public_topic(cfg["slug"])
     return cfg

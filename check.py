@@ -24,7 +24,18 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
+import sitegen
 from sources import evaluate, forecast, http, ndbc, notify, tides
+from sources.words import (
+    RATING_WORD as _RATING_WORD,
+    compass as _compass,
+    power_words as _power_words,
+    rating as _rating,
+    rating_band as _rating_band,
+    size_words as _size_words,
+    tide_words as _tide_words,
+    wind_words as _wind_words,
+)
 from sources.timeutil import TZ, clock, floor_hour, hour_label, next_check_after, now as now_local
 
 STATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".state.json")
@@ -63,7 +74,7 @@ class Context:
         if station not in self._tides:
             start = (self.now - datetime.timedelta(days=1)).date()
             try:
-                self._tides[station] = tides.fetch(station, start, days=4)
+                self._tides[station] = tides.fetch(station, start, days=config.FORECAST_DAYS + 1)
             except Exception as e:  # noqa: BLE001
                 print("  ! tide fetch failed (%s): %s" % (station, e), file=sys.stderr)
                 self._tides[station] = None
@@ -76,7 +87,7 @@ class Context:
         k = self._grid(lat, lon)
         if k not in self._marine:
             try:
-                self._marine[k] = forecast.marine(lat, lon, days=3)
+                self._marine[k] = forecast.marine(lat, lon, days=config.FORECAST_DAYS)
             except Exception as e:  # noqa: BLE001
                 print("  ! marine forecast failed: %s" % e, file=sys.stderr)
                 self._marine[k] = {}
@@ -86,7 +97,8 @@ class Context:
         k = self._grid(lat, lon)
         if k not in self._wind:
             try:
-                self._wind[k], self._sun[k] = forecast.wind_and_sun(lat, lon, days=3)
+                self._wind[k], self._sun[k] = forecast.wind_and_sun(
+                    lat, lon, days=config.FORECAST_DAYS)
             except Exception as e:  # noqa: BLE001
                 print("  ! wind/sun forecast failed: %s" % e, file=sys.stderr)
                 self._wind[k], self._sun[k] = {}, {}
@@ -98,18 +110,12 @@ class Context:
     def sun(self, lat, lon, date):
         return self._sun[self._load_wind(lat, lon)].get(date, (None, None))
 
+    def sun_by_date(self, lat, lon):
+        """{date: (sunrise, sunset)} for every forecast day."""
+        return self._sun[self._load_wind(lat, lon)]
+
 
 # -------------------------------------------------------------------- formatting
-
-_COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-               "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-
-
-def _compass(deg):
-    if deg is None:
-        return "?"
-    return _COMPASS_16[int((deg % 360) / 22.5 + 0.5) % 16]
-
 
 def _wind_phrase(wk, wd, rel):
     if wk is None:
@@ -167,21 +173,7 @@ def _window_line(res):
         _limiter_phrase(nm["limiter"], nm["cond"], res["cfg"]))
 
 
-def _rating(score):
-    """0-100 internal score -> 1.0-10.0 surf rating."""
-    return max(1.0, min(10.0, round(score / 10.0, 1)))
-
-
-def _rating_band(r):
-    # gap in the spec (5-6) folded into yellow: red <5, yellow 5-7.5, green >7.5
-    if r < 5.0:
-        return "red"
-    if r <= 7.5:
-        return "yellow"
-    return "green"
-
-
-_DOT = {"red": "\U0001f534", "yellow": "\U0001f7e1", "green": "\U0001f7e2"}
+_DOT ={"red": "\U0001f534", "yellow": "\U0001f7e1", "green": "\U0001f7e2"}
 _ANSI = {"red": "31", "yellow": "33", "green": "32"}
 _USE_ANSI = sys.stdout.isatty()
 
@@ -252,64 +244,6 @@ def _signoff(band):
 
 
 # --- plain-language translations for the phone notification --------------------
-
-_RATING_WORD = {"green": "GOOD", "yellow": "OKAY", "red": "POOR"}
-
-
-def _size_words(ft):
-    if ft is None:
-        return "size unknown"
-    if ft < 1.5:
-        return "tiny (ankle-high)"
-    if ft < 2.5:
-        return "small (knee-high)"
-    if ft < 3.5:
-        return "waist-high"
-    if ft < 4.5:
-        return "chest-high"
-    if ft < 5.5:
-        return "shoulder- to head-high"
-    if ft < 7:
-        return "head-high and bigger"
-    if ft < 9:
-        return "overhead"
-    return "well overhead — big"
-
-
-def _power_words(period_s):
-    if period_s is None:
-        return ""
-    if period_s < 8:
-        return "weak, wind-choppy swell"
-    if period_s < 10:
-        return "average swell"
-    if period_s < 13:
-        return "solid, lined-up swell"
-    return "powerful long-period swell"
-
-
-def _wind_words(wk, wd, cfg):
-    if wk is None:
-        return "wind unknown"
-    rel = evaluate.wind_relation(wd, cfg)
-    if wk < 4:
-        return "no wind — glassy and clean"
-    if rel == "offshore":
-        return "offshore wind — grooming the waves clean"
-    if wk < 8:
-        return "light wind — mostly clean" if rel == "cross" else "light wind — slightly bumpy"
-    if wk < 13:
-        return "breezy — bumpy and choppy"
-    return "windy — choppy and messy"
-
-
-def _tide_words(tf, state=None):
-    if tf is None:
-        return "tide unknown"
-    level = "Low" if tf < 2.0 else "Medium" if tf < 4.0 else "High"
-    move = {"rising": "coming in", "falling": "going out"}.get(state)
-    return "%s tide, %s" % (level, move) if move else "%s tide" % level
-
 
 def _when_words(res, now):
     w = res["window"]
@@ -597,18 +531,41 @@ def run(args):
             return 2
 
     results = []
+    site_inputs = []
     for cfg in spots:
+        buoy = ctx.buoy(cfg["buoys"])
+        tide = ctx.tide(cfg["tide_station"])
+        marine = ctx.marine(cfg["lat"], cfg["lon"])
+        wind = ctx.wind(cfg["lat"], cfg["lon"])
         res = evaluate.evaluate_spot(
-            cfg, now,
-            ctx.buoy(cfg["buoys"]),
-            ctx.tide(cfg["tide_station"]),
-            ctx.marine(cfg["lat"], cfg["lon"]),
-            ctx.wind(cfg["lat"], cfg["lon"]),
+            cfg, now, buoy, tide, marine, wind,
             ctx.sun(cfg["lat"], cfg["lon"], today),
             ctx.sun(cfg["lat"], cfg["lon"], tomorrow),
             next_check=next_check,
         )
         results.append(res)
+        if args.site:
+            sun_map = ctx.sun_by_date(cfg["lat"], cfg["lon"])
+            calib = evaluate.calibration(now, marine, wind, tide, buoy)
+            today_sun = sun_map.get(today)
+            # Chart today while there's still daylight to surf; after that, tomorrow.
+            chart_day = today
+            if not today_sun or not today_sun[1] or now > today_sun[1] - datetime.timedelta(minutes=45):
+                chart_day = tomorrow
+            chart_sun = sun_map.get(chart_day)
+            site_inputs.append({
+                "result": res,
+                "outlook": evaluate.outlook(cfg, now, buoy, tide, marine, wind, sun_map, calib,
+                                            days=config.OUTLOOK_DAYS),
+                "sun": today_sun,
+                "timeline_day": chart_day,
+                "timeline": (evaluate.timeline(cfg, chart_day, chart_sun, now, buoy, tide, marine,
+                                               wind, calib) if chart_sun and chart_sun[0] else []),
+            })
+
+    if args.site:
+        sitegen.build(site_inputs, now, args.site)
+        print("site written to %s" % args.site, file=sys.stderr)
 
     if args.json:
         print(json.dumps(_jsonable(results, now), indent=2, default=str))
@@ -627,13 +584,17 @@ def run(args):
         meta = state.setdefault("_meta", {})
 
         if args.digest:
-            notify.send(digest_title(results, now), format_digest(results, now, meta))
+            notify.send(digest_title(results, now), format_digest(results, now, meta),
+                        public_topics=(config.public_topic("daily"),) if not args.spot else (),
+                        click=config.SITE_URL)
 
         for res in results:
             if should_alert(res, state, today.isoformat(), args.force):
                 alerts.append(res)
         for res in alerts:
-            notify.send(alert_title(res), format_alert(res, now))
+            notify.send(alert_title(res), format_alert(res, now),
+                        public_topics=(res["cfg"]["ntfy_topic"],),
+                        click="%s/spots/%s/" % (config.SITE_URL, res["cfg"]["slug"]))
 
         for res in results:
             entry = {"kind": alert_kind(res) or res["verdict"], "date": today.isoformat()}
@@ -710,6 +671,7 @@ def main():
     p.add_argument("--test-alert", action="store_true", help="send one sample notification to verify delivery, then exit")
     p.add_argument("--notify", metavar="SPOT", help="push an on-demand conditions check for SPOT (any verdict), then exit")
     p.add_argument("--digest", action="store_true", help="push a one-shot summary of all spots (use on the first check of the day)")
+    p.add_argument("--site", metavar="DIR", help="also build the static website (and data/latest.json) into DIR")
     sys.exit(run(p.parse_args()))
 
 

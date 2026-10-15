@@ -48,7 +48,9 @@ formatters + state I/O).
   - [x] Phase 1: log every model's forecast and the buoy readings; score them
     (`tools/skill_report.py`). Collecting data now; trust it after 2–4 weeks.
   - [ ] Phase 2: blend models, weighted by measured error.
-  - [ ] Phase 3: score both swell trains.
+  - [x] Phase 3: score both swell trains (backtested; beat primary-only in 16/16 comparisons).
+  - [ ] Near-term blend: lean on the live buoy for the first ~12 h, the model after (backtests
+    say persistence wins early). Confirm with the live log first.
   - [ ] Phase 4: upstream buoys / wind / nearshore factors, chosen from the data.
 - [ ] **Feedback loop.** `check.py --rate <spot> <1-10>` after a session; append
   every evaluation + the real rating to a log; a `tune` script that reports where

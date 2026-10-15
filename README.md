@@ -20,7 +20,7 @@ in GitHub Actions on a schedule.
   the *next* scheduled check and warns you early.
 - **De-duplicated alerts** with state kept in the GitHub Actions cache, plus a
   daily digest and a heartbeat footer.
-- **171 unit tests** covering the scoring, tide interpolation, scheduling clock, and
+- **214 unit tests** covering the scoring, tide interpolation, scheduling clock, and
   feed parsing, run in CI on every push. See [`ROADMAP.md`](ROADMAP.md) for the
   review and what's planned next.
 

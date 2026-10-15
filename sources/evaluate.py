@@ -111,13 +111,94 @@ def wind_relation(dir_deg, cfg):
     return "cross" if _ang_dist(dir_deg, _arc_center(*cfg["offshore_dir_deg"])) <= 70 else "onshore"
 
 
+# ------------------------------------------------------------------- swell trains
+#
+# A wave model splits the swell into a primary and a secondary train. The buoy's
+# "swell" is one band that already holds both, so the model has to be put back together
+# before it can be compared with the buoy or scored. The three rules below were picked
+# by backtesting 45 days of hindcast against the buoys (docs/FORECAST_PLAN.md, Phase 3):
+#   height     primary plus half the secondary's energy: better than primary alone in all
+#              16 comparisons tried, by 3-9%. Using the secondary in full overshoots.
+#   period     power-weighted mean across the trains: the model's primary period runs
+#              ~3 s short of the buoy and this closes part of the gap at every lead time.
+#   direction  the longest-period train that carries at least a quarter of the energy,
+#              which is what the buoy's swell direction reports.
+
+SECONDARY_MIN_PERIOD_S = 8.0       # below this it's wind-swell chop, not a surfable train
+SECONDARY_ENERGY_WEIGHT = 0.5
+SIGNIFICANT_SHARE = 0.25
+_RECEPTIVE_FALLOFF_DEG = 45.0
+
+
+def _receptivity(deg, cfg):
+    """How much of a train's energy reaches the break: 1 inside the swell window, fading
+    to 0 over 45 degrees beyond it. With no cfg (comparing with a buoy) all of it counts."""
+    if cfg is None:
+        return 1.0
+    if deg is None:
+        return 0.5
+    lo, hi = cfg["swell_dir_deg"]
+    if _in_arc(deg, lo, hi):
+        return 1.0
+    edge = min(_ang_dist(deg, lo), _ang_dist(deg, hi))
+    return _clamp(1.0 - edge / _RECEPTIVE_FALLOFF_DEG)
+
+
+def model_trains(m):
+    """[{h, p, d}, ...] (metres, seconds, degrees-from) from one hourly model row, primary
+    first. Empty when the model has no primary swell. The secondary is kept only if it is a
+    real swell, not chop."""
+    h1, p1 = m.get("swell_wave_height"), m.get("swell_wave_period")
+    if h1 is None or not p1:
+        return []
+    trains = [{"h": h1, "p": p1, "d": m.get("swell_wave_direction")}]
+    h2, p2 = m.get("secondary_swell_wave_height"), m.get("secondary_swell_wave_period")
+    if h2 and p2 and p2 >= SECONDARY_MIN_PERIOD_S:
+        trains.append({"h": h2, "p": p2, "d": m.get("secondary_swell_wave_direction")})
+    return trains
+
+
+def combine_swell(trains, cfg=None):
+    """(height_m, period_s, direction) of the swell band from its trains, primary first.
+    Pass `cfg` to count only the energy that reaches that break; leave it None to compare
+    with a buoy, which sees everything."""
+    primary = trains[0]
+    energy = [primary["h"] ** 2] + [
+        SECONDARY_ENERGY_WEIGHT * t["h"] ** 2 * _receptivity(t["d"], cfg) for t in trains[1:]]
+    power = [e * t["p"] for e, t in zip(energy, trains)]
+    height = sum(energy) ** 0.5
+    period = (sum(w * t["p"] for w, t in zip(power, trains)) / sum(power)
+              if sum(power) > 0 else primary["p"])
+    raw = [t["h"] ** 2 for t in trains]
+    major = [t for t, e in zip(trains, raw) if t["d"] is not None and e >= SIGNIFICANT_SHARE * sum(raw)]
+    direction = max(major, key=lambda t: t["p"])["d"] if major else primary["d"]
+    return height, period, direction
+
+
+def secondary_train(cfg, m):
+    """The secondary swell worth mentioning, for display; None if it isn't one. Heights are
+    the model's own, uncalibrated, so treat them as a guide."""
+    trains = model_trains(m or {})
+    if len(trains) < 2:
+        return None
+    first, second = trains
+    if second["h"] * M_TO_FT < 1.0 or second["h"] ** 2 < 0.1 * first["h"] ** 2:
+        return None
+    return {
+        "height_ft": second["h"] * M_TO_FT, "period_s": second["p"], "dir_deg": second["d"],
+        "in_window": second["d"] is not None and _in_arc(second["d"], *cfg["swell_dir_deg"]),
+    }
+
+
 # ----------------------------------------------------------------- data assembly
 
-def _conditions(dt, marine_row, wind_row, tide, buoy, use_buoy, calib=None):
+def _conditions(dt, marine_row, wind_row, tide, buoy, use_buoy, calib=None, cfg=None):
     """(height_ft, period_s, swell_dir, wind_kn, wind_dir, tide_ft) for one moment.
 
     When reading from the wave model (not the buoy), `calib` (a {h_scale, p_shift}
-    dict) nudges the model onto the live buoy so only its trend carries through.
+    dict) nudges the model onto the live buoy so only its trend carries through. `cfg`
+    makes the model's swell count only what reaches that break; without it the model's
+    swell is put back together the way the buoy reports it, which is what calibration needs.
     """
     if use_buoy and buoy and not buoy["stale"]:
         h_m = buoy["swh_m"] or buoy["wvht_m"]
@@ -126,14 +207,18 @@ def _conditions(dt, marine_row, wind_row, tide, buoy, use_buoy, calib=None):
         swell_dir = buoy["swd_deg"] if buoy["swd_deg"] is not None else buoy["mwd_deg"]
     else:
         m = marine_row or {}
-        h_m = m.get("swell_wave_height")
-        if h_m is None:
-            h_m = m.get("wave_height")
+        trains = model_trains(m)
+        if trains:
+            h_m, period_s, swell_dir = combine_swell(trains, cfg)
+        else:
+            h_m = m.get("swell_wave_height")
+            if h_m is None:
+                h_m = m.get("wave_height")
+            period_s = m.get("swell_wave_period") or m.get("wave_period")
+            swell_dir = m.get("swell_wave_direction")
+            if swell_dir is None:
+                swell_dir = m.get("wave_direction")
         height_ft = h_m * M_TO_FT if h_m is not None else None
-        period_s = m.get("swell_wave_period") or m.get("wave_period")
-        swell_dir = m.get("swell_wave_direction")
-        if swell_dir is None:
-            swell_dir = m.get("wave_direction")
         if calib:
             if height_ft is not None:
                 height_ft *= calib["h_scale"]
@@ -163,7 +248,7 @@ def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, cal
     while dt <= last:
         near = abs((dt - now).total_seconds()) <= 3 * 3600
         cond = _conditions(dt, marine.get(dt), wind.get(dt), tide, buoy,
-                           use_buoy=near and fresh_buoy, calib=calib)
+                           use_buoy=near and fresh_buoy, calib=calib, cfg=cfg)
         total, sub = score(*cond, cfg=cfg)
         rows.append({"time": dt, "score": total, "sub": sub, "cond": cond,
                      "gates_ok": _gates_ok(cond[0], cond[1], cond[3], cond[4], cfg),
@@ -264,7 +349,7 @@ def outlook(cfg, now, buoy, tide, marine, wind, sun_by_date, calib, days=7):
 
 def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow, next_check=None):
     now_cond = _conditions(now, marine.get(floor_hour(now)), wind.get(floor_hour(now)),
-                           tide, buoy, use_buoy=True)
+                           tide, buoy, use_buoy=True, cfg=cfg)
     now_total, now_sub = score(*now_cond, cfg=cfg)
     now_gates = _gates_ok(now_cond[0], now_cond[1], now_cond[3], now_cond[4], cfg)
 
@@ -333,6 +418,7 @@ def evaluate_spot(cfg, now, buoy, tide, marine, wind, sun_today, sun_tomorrow, n
         "rating_score": rating_score,
         "now_sub": now_sub,
         "now_cond": now_cond,
+        "secondary_swell": secondary_train(cfg, marine.get(floor_hour(now))),
         "now_gates_ok": now_gates,
         "buoy": buoy,
         "tide_state": tide.state(now) if tide else "?",

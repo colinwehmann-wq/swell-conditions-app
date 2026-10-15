@@ -12,7 +12,7 @@ Appends JSON lines to `<dir>/YYYY-MM.jsonl`. Two kinds of record (metres, second
       One buoy reading.
 
 Short keys: hs total wave height, tp mean period, sh/sp primary swell height/period, sd swell
-direction, s2h/s2p secondary swell, wwh/wwp wind-wave height/period, ap average period.
+direction, s2h/s2p/s2d secondary swell, wwh/wwp wind-wave height/period, ap average period.
 
 `sources/skill.py` pairs the two kinds to measure how wrong each model is by lead time.
 """
@@ -45,6 +45,7 @@ _FC_KEYS = {
     "wave_height": "hs", "wave_period": "tp",
     "swell_wave_height": "sh", "swell_wave_period": "sp", "swell_wave_direction": "sd",
     "secondary_swell_wave_height": "s2h", "secondary_swell_wave_period": "s2p",
+    "secondary_swell_wave_direction": "s2d",
     "wind_wave_height": "wwh",
 }
 FC_VARS = list(_FC_KEYS)
@@ -56,7 +57,7 @@ _OB_KEYS = {
 
 
 def _round(key, v):
-    if key == "sd":
+    if key in ("sd", "s2d"):
         return round(v, 0)
     return round(v, 1 if key in ("tp", "sp", "s2p", "wwp", "ap") else 2)
 

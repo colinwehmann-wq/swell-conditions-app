@@ -80,16 +80,42 @@ table to fill before acting on it.
 
 **Done when** the blend beats the single model in `skill_report.py`.
 
-## Phase 3: score both swell trains
+## Phase 3: score both swell trains (built Oct 14, 2026)
 
-1. Use the secondary swell (height, period, direction if offered).
-2. Represent conditions as a list of swell trains.
-3. Score each train against the break's swell window; the dominant train carries the score, a
-   good second train adds a bonus. Touches `evaluate.py`, outlook, timeline, `words.py`.
-4. Show it on the site; update tests.
-5. Log it so Phase 1 can verify it.
+The plan was to "combine the trains". Backtesting before building showed that how you combine
+them matters, and the obvious way (add the energies in full) makes the production model's
+height *worse*. So the rules below were chosen from 45 days of hindcast against both buoys, then
+re-checked through the real calibration code (old vs new, 16 comparisons: 2 models × 2 buoys × 4
+lead times; the new way won every one).
 
-**Done when** a mixed-swell day reads correctly and the error table shows no regression.
+| Quantity | Rule | Why | Effect (default model, vs buoy) |
+|---|---|---|---|
+| Height | primary + **half** the secondary's energy, counting only the part that reaches the break | the buoy's "swell" holds both trains, so primary alone runs low; the full secondary overshoots | 0.107 → 0.101 m at +6 h |
+| Period | power-weighted mean across the trains | the model's period runs ~3 s short of the buoy's peak period; this closes part of it | 1.93 → 1.66 s at +6 h (GFS: 2.19 → 1.71) |
+| Direction | longest-period train with ≥25% of the energy | matches what the buoy's swell direction reports | 13.6° → 10.4° (GFS: 18.3° → 12.2°) |
+
+How it's wired: `evaluate.combine_swell` / `model_trains`; calibration compares the buoy with
+*all* the model's swell (the buoy sees everything), while scoring at a break counts only what
+reaches it (full inside the swell window, fading to nothing 45° outside). A secondary under 8 s is
+chop and ignored. Single-train data behaves exactly as before. The spot page mentions a real
+secondary ("plus W 1.5 ft at 9 s", or "off-angle"), and `data/latest.json` carries it.
+
+The accuracy report now has "both trains" rows beside the primary-only ones, computed from the
+log with the same code, so the live data keeps checking this choice.
+
+**Honest limits:** the backtest used the model's own recent analyses (hindcast), not true
+archived forecasts, at two buoys. The 0.5 energy weight was fitted on that one dataset. Revisit
+once the live log has weeks of real forecasts.
+
+### Finding: near-term, "nothing changes" beats the model
+
+The same backtests show that for the next ~6–12 hours, simply assuming the buoy reading stays
+put beats the calibrated model trend (height error 0.089 m vs 0.101–0.115 m at +6 h; period
+1.29 s vs 1.66–1.93 s). The model only wins from roughly +24 h (height) to +48 h (period). That's
+the shape of a lead-time-aware blend: lean on the live buoy early, hand over to the model later.
+It's the most promising accuracy gain found so far, and the live log (which already scores
+persistence) is the right place to confirm it before building it. Treat it as the first thing to
+check when the skill table has data.
 
 ## Phase 4: pick the next upgrade from the data
 

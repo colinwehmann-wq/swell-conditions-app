@@ -411,10 +411,16 @@ def spot_page(spot, payload):
     def stat(label, value, sub=""):
         return '<div class="stat"><dt>%s</dt><dd>%s</dd><dd class="stat-sub">%s</dd></div>' % (esc(label), esc(value), esc(sub))
 
+    sec = spot.get("secondary_swell")
+    dir_note = [("%d°" % c["swell_dir_deg"]) if c["swell_dir_deg"] is not None else ""]
+    if sec:
+        dir_note.append("plus %s %s ft at %d s%s" % (
+            sec["dir"] or "a second swell", _f(sec["height_ft"]), sec["period_s"],
+            "" if sec["in_window"] else ", off-angle"))
     stats = "".join([
         stat("Size", "%s ft" % _f(c["height_ft"]) if c["height_ft"] is not None else "—", c["words"]["size"]),
         stat("Period", "%d s" % c["period_s"] if c["period_s"] is not None else "—", c["words"]["power"]),
-        stat("Swell from", c["swell_dir"] or "—", "%d°" % c["swell_dir_deg"] if c["swell_dir_deg"] is not None else ""),
+        stat("Swell from", c["swell_dir"] or "—", " · ".join(x for x in dir_note if x)),
         stat("Wind", "%d kt %s" % (c["wind_kn"], c["wind_dir"] or "") if c["wind_kn"] is not None else "—", c["words"]["wind"]),
         stat("Tide", "%s ft" % _f(c["tide_ft"]) if c["tide_ft"] is not None else "—", c["words"]["tide"]),
     ])

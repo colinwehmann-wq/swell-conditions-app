@@ -13,6 +13,7 @@ _TZ_PARAM = TIMEZONE.replace("/", "%2F")
 _MARINE_VARS = [
     "wave_height", "wave_direction", "wave_period",
     "swell_wave_height", "swell_wave_period", "swell_wave_direction",
+    "secondary_swell_wave_height", "secondary_swell_wave_period", "secondary_swell_wave_direction",
     "wind_wave_height",
 ]
 _WIND_VARS = ["wind_speed_10m", "wind_direction_10m", "wind_gusts_10m"]

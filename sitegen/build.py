@@ -134,6 +134,19 @@ def _outlook(days, cfg):
     return out
 
 
+def _secondary(s):
+    """The secondary swell worth a mention (or None), shaped for the page and the JSON."""
+    if not s:
+        return None
+    return {
+        "height_ft": _r(s["height_ft"]),
+        "period_s": _r(s["period_s"], 0),
+        "dir_deg": _r(s["dir_deg"], 0),
+        "dir": words.compass(s["dir_deg"]) if s["dir_deg"] is not None else None,
+        "in_window": bool(s["in_window"]),
+    }
+
+
 def _spot(item, now):
     res = item["result"]
     cfg = res["cfg"]
@@ -147,6 +160,7 @@ def _spot(item, now):
         "verdict": res["verdict"],
         **_band(res["rating_score"]),
         "now": now_c,
+        "secondary_swell": _secondary(res.get("secondary_swell")),
         "board": _board(res["now_cond"], cfg),
         "buoy": None if not buoy else {
             "id": buoy["buoy"],

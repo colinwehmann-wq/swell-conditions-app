@@ -16,6 +16,7 @@ import bisect
 import datetime
 import math
 
+from . import evaluate
 from .timeutil import UTC
 
 LEAD_BUCKETS = [(0, 6), (6, 12), (12, 24), (24, 48), (48, 73)]   # [lo, hi) in hours
@@ -23,18 +24,25 @@ TOLERANCE_MIN = 45     # a reading this close to the valid time counts as "that 
 MIN_N = 5              # fewer pairs than this are shown, but flagged as thin
 
 # label, forecast key, observation key, circular?
+# A forecast key starting "c:" is derived: the swell band put back together from both of the
+# model's swell trains, exactly as the live scoring does it (evaluate.combine_swell). Those
+# rows sit beside the primary-only ones so the table shows which is closer to the buoy.
 VARIABLES = [
     ("Total wave height (m)", "hs", "hs", False),
     ("Swell height (m)", "sh", "sh", False),
+    ("Swell height, both trains (m)", "c:h", "sh", False),
     ("Swell period (s)", "sp", "sp", False),
+    ("Swell period, both trains (s)", "c:p", "sp", False),
     ("Swell direction (deg)", "sd", "sd", True),
+    ("Swell direction, both trains (deg)", "c:d", "sd", True),
 ]
 # Not scored yet: the models' total `tp` (wave_period) against the buoy. NDBC's `ap` is an
 # average period (~8 s here) while the model's is nearer a peak period (~13 s), so the two
 # aren't the same quantity. Comparing against the buoy's dominant period (DPD, in the .txt
 # feed) would be fair; the forecast side is already logged.
 _CIRCULAR = {label for label, _f, _o, circ in VARIABLES if circ}
-_DECIMALS = {"Swell direction (deg)": 0, "Swell period (s)": 1}
+_DECIMALS = {"Swell direction (deg)": 0, "Swell period (s)": 1,
+             "Swell direction, both trains (deg)": 0, "Swell period, both trains (s)": 1}
 
 
 def angle_diff(a, b):
@@ -82,6 +90,24 @@ def _nearest(times, readings, t, tol_min, only_before=False):
     return best[1] if best else None
 
 
+_ROW_TO_MODEL = {
+    "sh": "swell_wave_height", "sp": "swell_wave_period", "sd": "swell_wave_direction",
+    "s2h": "secondary_swell_wave_height", "s2p": "secondary_swell_wave_period",
+    "s2d": "secondary_swell_wave_direction",
+}
+
+
+def _forecast_value(row, key):
+    """A logged row's value for `key`, or None if the row can't supply it."""
+    if not key.startswith("c:"):
+        return row.get(key)
+    trains = evaluate.model_trains({m: row[k] for k, m in _ROW_TO_MODEL.items() if k in row})
+    if not trains:
+        return None
+    height, period, direction = evaluate.combine_swell(trains)
+    return {"c:h": height, "c:p": period, "c:d": direction}[key]
+
+
 def _pair(model, buoy, lead, var, fc, ob):
     err = angle_diff(fc, ob) if var in _CIRCULAR else fc - ob
     return {"model": model, "buoy": buoy, "lead": lead, "var": var, "fc": fc, "ob": ob, "err": err}
@@ -103,8 +129,9 @@ def pairs(records, tol_minutes=TOLERANCE_MIN):
             if ob is None:
                 continue
             for label, fk, ok, _circ in VARIABLES:
-                if fk in row and ok in ob:
-                    out.append(_pair(r["model"], r["buoy"], row["lead"], label, row[fk], ob[ok]))
+                value = _forecast_value(row, fk)
+                if value is not None and ok in ob:
+                    out.append(_pair(r["model"], r["buoy"], row["lead"], label, value, ob[ok]))
 
         key = (r["buoy"], r["issued"])
         if key in persisted:

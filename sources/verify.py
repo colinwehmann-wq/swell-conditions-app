@@ -1,0 +1,208 @@
+"""Forecast-accuracy log: record what the wave models predicted and what the buoys measured.
+
+Appends JSON lines to `<dir>/YYYY-MM.jsonl`. Two kinds of record (metres, seconds, degrees-from):
+
+  fc  {"k": "fc", "issued": ISO, "buoy": "46224", "model": "ncep_gfswave016",
+       "rows": [{"t": ISO, "lead": 3, "hs": 1.2, "tp": 13.1, "sh": 1.0, "sp": 13.0, "sd": 198,
+                 "s2h": 0.4, "s2p": 8.7, "wwh": 0.1}, ...]}
+      One model's forecast at the buoy's location, every 3 h out to 72 h. `issued` is when we
+      asked (floored to the hour), so `lead` is "how far ahead was this call made".
+  ob  {"k": "ob", "buoy": "46224", "t": ISO (UTC), "hs": 1.1, "sh": 1.0, "sp": 14.3,
+       "sd": 202.5, "wwh": 0.6, "wwp": 6.2, "ap": 8.1}
+      One buoy reading.
+
+Short keys: hs total wave height, tp mean period, sh/sp primary swell height/period, sd swell
+direction, s2h/s2p secondary swell, wwh/wwp wind-wave height/period, ap average period.
+
+`sources/skill.py` pairs the two kinds to measure how wrong each model is by lead time.
+"""
+import datetime
+import json
+import os
+
+from . import forecast, ndbc
+from .timeutil import UTC
+
+# Buoy -> where to ask the models. Verifying at the buoy compares the model with the thing it
+# is trying to predict, without the coastline effects that sit between a buoy and a break.
+BUOYS = {
+    "46224": (33.178, -117.472),   # Oceanside Offshore
+    "46225": (32.933, -117.391),   # Torrey Pines Outer
+}
+
+# "default" is what the live app uses today (Open-Meteo's best match, identical to
+# meteofrance_wave at this location). The others are Phase 2 blend candidates; logging them now
+# means their history is already there when we decide how to weight them.
+MODELS = ["default", "meteofrance_wave", "ncep_gfswave016", "ecmwf_wam", "gwam"]
+
+LEAD_STEP_H = 3
+MAX_LEAD_H = 72
+MIN_FC_GAP_H = 5            # models update ~4x a day; closer repeats add size, not information
+OBS_HOURS = 30
+BACKFILL_HOURS = 24 * 46    # the NDBC feed keeps ~45 days; a first run takes all of it
+
+_FC_KEYS = {
+    "wave_height": "hs", "wave_period": "tp",
+    "swell_wave_height": "sh", "swell_wave_period": "sp", "swell_wave_direction": "sd",
+    "secondary_swell_wave_height": "s2h", "secondary_swell_wave_period": "s2p",
+    "wind_wave_height": "wwh",
+}
+FC_VARS = list(_FC_KEYS)
+
+_OB_KEYS = {
+    "wvht_m": "hs", "swh_m": "sh", "swp_s": "sp", "swd_deg": "sd",
+    "wwh_m": "wwh", "wwp_s": "wwp", "apd_s": "ap",
+}
+
+
+def _round(key, v):
+    if key == "sd":
+        return round(v, 0)
+    return round(v, 1 if key in ("tp", "sp", "s2p", "wwp", "ap") else 2)
+
+
+def _dt(text):
+    return datetime.datetime.fromisoformat(text)
+
+
+# ------------------------------------------------------------------------- records
+
+def forecast_record(issued, buoy, model, series):
+    """Turn one model's hourly series ({aware datetime: {open-meteo var: value}}) into a log
+    record, or None if it holds nothing usable in the next 72 hours."""
+    base = issued.replace(minute=0, second=0, microsecond=0)
+    base_utc = base.astimezone(UTC)
+    rows = []
+    for t in sorted(series):
+        lead = (t.astimezone(UTC) - base_utc).total_seconds() / 3600.0
+        if lead < 0 or lead > MAX_LEAD_H or lead % LEAD_STEP_H:
+            continue
+        row = {"t": t.isoformat(), "lead": int(lead)}
+        for var, key in _FC_KEYS.items():
+            v = series[t].get(var)
+            if v is not None:
+                row[key] = _round(key, v)
+        if len(row) > 2:
+            rows.append(row)
+    if not rows:
+        return None
+    return {"k": "fc", "issued": base.isoformat(), "buoy": buoy, "model": model, "rows": rows}
+
+
+def observation_records(buoy, readings):
+    """Log records for `ndbc.fetch_spec_history` readings."""
+    out = []
+    for r in readings:
+        rec = {"k": "ob", "buoy": buoy, "t": r["time"].astimezone(UTC).isoformat()}
+        for src, key in _OB_KEYS.items():
+            if r.get(src) is not None:
+                rec[key] = _round(key, r[src])
+        out.append(rec)
+    return out
+
+
+# ---------------------------------------------------------------------------- store
+
+def _files(log_dir, last_months=None):
+    try:
+        names = sorted(n for n in os.listdir(log_dir) if n.endswith(".jsonl"))
+    except OSError:
+        return []
+    if last_months:
+        names = names[-last_months:]
+    return [os.path.join(log_dir, n) for n in names]
+
+
+def load(log_dir, last_months=None):
+    """Every record in the log, oldest first. Bad lines are skipped; a missing dir gives []."""
+    out = []
+    for path in _files(log_dir, last_months):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    continue
+    return out
+
+
+def append_new(log_dir, records):
+    """Write the records that aren't already logged. Returns (written, skipped).
+
+    Observations are unique by (buoy, time). A forecast is skipped if the same model at the
+    same buoy was already logged within MIN_FC_GAP_H hours.
+    """
+    existing = load(log_dir, last_months=2)
+    seen_ob = {(r["buoy"], r["t"]) for r in existing if r.get("k") == "ob"}
+    last_fc = {}
+    for r in existing:
+        if r.get("k") == "fc":
+            key, t = (r["buoy"], r["model"]), _dt(r["issued"])
+            if key not in last_fc or t > last_fc[key]:
+                last_fc[key] = t
+
+    by_month = {}
+    skipped = 0
+    for rec in records:
+        if rec["k"] == "ob":
+            key = (rec["buoy"], rec["t"])
+            if key in seen_ob:
+                skipped += 1
+                continue
+            seen_ob.add(key)
+            month = rec["t"][:7]
+        else:
+            key, t = (rec["buoy"], rec["model"]), _dt(rec["issued"])
+            prev = last_fc.get(key)
+            if prev is not None and abs((t - prev).total_seconds()) / 3600.0 < MIN_FC_GAP_H:
+                skipped += 1
+                continue
+            last_fc[key] = t
+            month = rec["issued"][:7]
+        by_month.setdefault(month, []).append(json.dumps(rec, separators=(",", ":")))
+
+    written = 0
+    if by_month:
+        os.makedirs(log_dir, exist_ok=True)
+    for month, lines in by_month.items():
+        with open(os.path.join(log_dir, "%s.jsonl" % month), "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        written += len(lines)
+    return written, skipped
+
+
+# -------------------------------------------------------------------------- collect
+
+def collect(now, log_dir, fetch_model=None, fetch_obs=None, buoys=None, models=None):
+    """Fetch every model's forecast and the recent buoy readings, and log what's new.
+
+    A failing source is reported in `problems` and skipped, never raised: this runs inside the
+    alert job and must not be able to stop an alert. The fetchers are injectable for tests.
+    """
+    fetch_model = fetch_model or forecast.marine_model
+    fetch_obs = fetch_obs or ndbc.fetch_spec_history
+    buoys = buoys or BUOYS
+    models = models or MODELS
+    have_obs = {r["buoy"] for r in load(log_dir, last_months=2) if r.get("k") == "ob"}
+
+    records, problems = [], []
+    for buoy, (lat, lon) in buoys.items():
+        hours = OBS_HOURS if buoy in have_obs else BACKFILL_HOURS
+        try:
+            records += observation_records(buoy, fetch_obs(buoy, hours))
+        except Exception as e:  # noqa: BLE001
+            problems.append("%s observations: %s" % (buoy, e))
+        for model in models:
+            try:
+                series = fetch_model(lat, lon, model, FC_VARS)
+            except Exception as e:  # noqa: BLE001
+                problems.append("%s %s forecast: %s" % (buoy, model, e))
+                continue
+            rec = forecast_record(now, buoy, model, series)
+            if rec:
+                records.append(rec)
+    written, skipped = append_new(log_dir, records)
+    return {"written": written, "skipped": skipped, "problems": problems}

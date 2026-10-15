@@ -20,7 +20,7 @@ in GitHub Actions on a schedule.
   the *next* scheduled check and warns you early.
 - **De-duplicated alerts** with state kept in the GitHub Actions cache, plus a
   daily digest and a heartbeat footer.
-- **118 unit tests** covering the scoring, tide interpolation, scheduling clock, and
+- **171 unit tests** covering the scoring, tide interpolation, scheduling clock, and
   feed parsing, run in CI on every push. See [`ROADMAP.md`](ROADMAP.md) for the
   review and what's planned next.
 
@@ -175,6 +175,19 @@ python3 -m http.server 8000 --directory _site     # then open http://localhost:8
 (longboard / fish / shortboard / performance board) based on size, period and wind;
 every pick carries a one-line reason. **Enabling Pages:** repo Settings → Pages →
 Source: *GitHub Actions* (the repo must be public on a free plan).
+
+## Forecast accuracy
+
+Every scheduled run also appends to an accuracy log: what five wave models predicted at the
+two buoys for the next 72 hours, and what the buoys then measured. `tools/skill_report.py`
+turns that into error tables by model and lead time, with a "assume nothing changes"
+(persistence) baseline that a model has to beat. The log lives on its own `forecast-log` branch
+(never on `main`); the report is printed in each Actions run's summary. Turn it on locally with
+`python3 check.py --report --log-dir forecast-log`, then `python3 tools/skill_report.py`.
+
+The reasoning, and what comes after measuring (blending models, scoring both swell trains, then
+upstream buoys, wind and nearshore transformation), is in
+[`docs/FORECAST_PLAN.md`](docs/FORECAST_PLAN.md).
 
 ## Running it automatically
 

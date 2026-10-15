@@ -38,13 +38,35 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read             # nothing is written back to the repo
+  contents: read
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # only to append to the `forecast-log` branch; main is never written
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false   # don't leave a write-scoped token lying around for later steps
+
+      # The forecast-accuracy log lives on its own orphan branch, not in the Actions cache
+      # (which can be evicted) and not on main. See docs/FORECAST_PLAN.md.
+      - name: Open forecast log
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir forecast-log
+          cd forecast-log
+          git init -q -b forecast-log
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin forecast-log >/dev/null 2>&1; then
+            git fetch -q --depth=1 origin forecast-log
+            git reset -q --hard FETCH_HEAD
+          else
+            echo "No forecast-log branch yet; this run starts it."
+          fi
 
       # Alert-dedupe state lives in the Actions cache, not the repo. Each run
       # writes a new entry keyed by run id; restore-keys grabs the most recent.
@@ -62,7 +84,7 @@ jobs:
           # Public (website opt-in) topics only get posts from scheduled runs, or on request.
           SURF_PUBLISH_PUBLIC: ${{ (github.event_name == 'schedule' || inputs.publish_public) && '1' || '' }}
           # SURF_WEBHOOK_URL: ${{ secrets.SURF_WEBHOOK_URL }}
-        run: python3 check.py --quiet --site _site ${{ (github.event.schedule == '15 12 * * *' || inputs.digest) && '--digest' || '' }} ${{ inputs.force && '--force' || '' }}
+        run: python3 check.py --quiet --site _site --log-dir forecast-log ${{ (github.event.schedule == '15 12 * * *' || inputs.digest) && '--digest' || '' }} ${{ inputs.force && '--force' || '' }}
 
       - name: Save alert state
         if: always()
@@ -70,6 +92,26 @@ jobs:
         with:
           path: .state.json
           key: surf-state-${{ github.run_id }}
+
+      # Commit this run's new log lines. A failure here is reported but never fails the run.
+      - name: Save forecast log
+        if: always()
+        continue-on-error: true
+        working-directory: forecast-log
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No new forecast log entries."
+            exit 0
+          fi
+          git -c user.name="surf-check" -c user.email="surf-check@users.noreply.github.com" \
+            commit -q -m "forecast log $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q origin HEAD:forecast-log
+
+      - name: Forecast skill report
+        if: always()
+        continue-on-error: true
+        run: python3 tools/skill_report.py forecast-log >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package the site
         uses: actions/upload-pages-artifact@v3

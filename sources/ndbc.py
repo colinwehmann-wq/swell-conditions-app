@@ -79,6 +79,39 @@ def fetch_spec(buoy, max_age_hours=3.0):
     return None
 
 
+def fetch_spec_history(buoy, hours=30.0):
+    """Every usable .spec reading from the last `hours`, newest first; [] on any failure.
+
+    The realtime2 file keeps ~45 days of 30-minute rows, so a large `hours` backfills.
+    Used to log what the ocean actually did, so forecasts can be scored against it.
+    """
+    try:
+        rows = _data_rows(http.get("https://www.ndbc.noaa.gov/data/realtime2/%s.spec" % buoy))
+    except Exception:
+        return []
+    out = []
+    for r in rows:
+        if len(r) < 15:
+            continue
+        try:
+            t = _row_time(r)
+        except ValueError:
+            continue
+        if _age_hours(t) > hours or _num(r[5]) is None:
+            continue
+        out.append({
+            "time": t,
+            "wvht_m": _num(r[5]),
+            "swh_m": _num(r[6]),
+            "swp_s": _num(r[7]),
+            "wwh_m": _num(r[8]),
+            "wwp_s": _num(r[9]),
+            "swd_deg": _dir(r[10]),
+            "apd_s": _num(r[13]),
+        })
+    return out
+
+
 def fetch_wind(buoy, max_age_hours=2.0):
     """Buoy anemometer wind, if the buoy has one and it's fresh. Many CDIP wave
     buoys (incl. 46224 / 46225) report no wind, so callers must handle None.

@@ -34,6 +34,20 @@ def marine(lat, lon, days=3):
     return _hourly(http.get_json(url))
 
 
+def marine_model(lat, lon, model, variables, days=4):
+    """One named wave model's hourly forecast, {local datetime: {variable: value}}.
+
+    `model` is an Open-Meteo id such as "ncep_gfswave016"; "default" omits the parameter, which
+    is what the live app uses. Fetched one model per call so the keys keep their plain names.
+    Used for the forecast-accuracy log, not for the live scoring.
+    """
+    url = ("%s?latitude=%.4f&longitude=%.4f&hourly=%s&forecast_days=%d&timezone=%s"
+           % (_MARINE, lat, lon, ",".join(variables), days, _TZ_PARAM))
+    if model != "default":
+        url += "&models=%s" % model
+    return _hourly(http.get_json(url))
+
+
 def wind_and_sun(lat, lon, days=3):
     """(hourly wind dict, {date: (sunrise_dt, sunset_dt)})."""
     url = ("%s?latitude=%.4f&longitude=%.4f&hourly=%s&daily=sunrise,sunset"

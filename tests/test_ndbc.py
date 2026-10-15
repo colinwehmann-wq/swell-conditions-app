@@ -91,5 +91,53 @@ class FetchSpec(unittest.TestCase):
         self.assertTrue(ndbc.fetch_spec("46224", max_age_hours=3.0)["stale"])
 
 
+class FetchSpecHistory(unittest.TestCase):
+    def setUp(self):
+        self._orig = ndbc.http.get
+
+    def tearDown(self):
+        ndbc.http.get = self._orig
+
+    @staticmethod
+    def row(hours_ago, wvht="1.1", swh="1.0", swp="14.3", swd="SSW", apd="8.1"):
+        t = datetime.datetime.now(ndbc.UTC) - datetime.timedelta(hours=hours_ago)
+        return "%s  %s  %s %s  0.6  6.2 %s WNW  SWELL  %s 204" % (
+            t.strftime("%Y %m %d %H %M"), wvht, swh, swp, swd, apd)
+
+    def feed(self, *rows):
+        header = "\n".join(SPEC_SAMPLE.splitlines()[:2])
+        ndbc.http.get = lambda *a, **k: header + "\n" + "\n".join(rows) + "\n"
+
+    def test_returns_every_row_inside_the_window_newest_first(self):
+        self.feed(self.row(1), self.row(5), self.row(20))
+        got = ndbc.fetch_spec_history("46224", hours=24)
+        self.assertEqual(len(got), 3)
+        self.assertGreater(got[0]["time"], got[1]["time"])
+
+    def test_rows_older_than_the_window_are_dropped(self):
+        self.feed(self.row(1), self.row(40))
+        self.assertEqual(len(ndbc.fetch_spec_history("46224", hours=30)), 1)
+
+    def test_a_large_window_backfills_the_whole_feed(self):
+        self.feed(self.row(1), self.row(24 * 40))
+        self.assertEqual(len(ndbc.fetch_spec_history("46224", hours=24 * 46)), 2)
+
+    def test_parses_the_fields_the_log_needs(self):
+        self.feed(self.row(1))
+        r = ndbc.fetch_spec_history("46224")[0]
+        self.assertEqual((r["wvht_m"], r["swh_m"], r["swp_s"], r["swd_deg"], r["apd_s"]),
+                         (1.1, 1.0, 14.3, 202.5, 8.1))
+
+    def test_rows_with_no_wave_height_are_skipped(self):
+        self.feed(self.row(1, wvht="MM"), self.row(2))
+        self.assertEqual(len(ndbc.fetch_spec_history("46224")), 1)
+
+    def test_network_error_returns_an_empty_list(self):
+        def boom(*a, **k):
+            raise RuntimeError("down")
+        ndbc.http.get = boom
+        self.assertEqual(ndbc.fetch_spec_history("46224"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 import sitegen
-from sources import evaluate, forecast, http, ndbc, notify, tides
+from sources import evaluate, forecast, http, ndbc, notify, tides, verify
 from sources.words import (
     RATING_WORD as _RATING_WORD,
     compass as _compass,
@@ -567,6 +567,9 @@ def run(args):
         sitegen.build(site_inputs, now, args.site)
         print("site written to %s" % args.site, file=sys.stderr)
 
+    if args.log_dir:
+        _log_forecasts(now, args.log_dir)
+
     if args.json:
         print(json.dumps(_jsonable(results, now), indent=2, default=str))
         return 0
@@ -610,6 +613,20 @@ def run(args):
     if not args.quiet or alerts:
         print(report)
     return 0
+
+
+def _log_forecasts(now, log_dir):
+    """Append this run's model forecasts and buoy readings to the accuracy log. Best effort:
+    a failure here is reported on stderr and never stops the check or its alerts."""
+    try:
+        out = verify.collect(now, log_dir)
+    except Exception as e:  # noqa: BLE001
+        print("  ! forecast log failed: %s" % e, file=sys.stderr)
+        return
+    print("forecast log: %d new records, %d already logged" % (out["written"], out["skipped"]),
+          file=sys.stderr)
+    for problem in out["problems"]:
+        print("  ! forecast log: %s" % problem, file=sys.stderr)
 
 
 def _ping_healthcheck():
@@ -672,6 +689,7 @@ def main():
     p.add_argument("--notify", metavar="SPOT", help="push an on-demand conditions check for SPOT (any verdict), then exit")
     p.add_argument("--digest", action="store_true", help="push a one-shot summary of all spots (use on the first check of the day)")
     p.add_argument("--site", metavar="DIR", help="also build the static website (and data/latest.json) into DIR")
+    p.add_argument("--log-dir", metavar="DIR", help="also append model forecasts and buoy readings to the accuracy log in DIR")
     sys.exit(run(p.parse_args()))
 
 

@@ -1,5 +1,6 @@
 .state.json
 _site/
+forecast-log/
 .env
 logs/
 __pycache__/

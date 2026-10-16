@@ -126,10 +126,11 @@ def _thumb(slug, prefix):
     if not p:
         return ('<a class="row-photo row-photo-plain" href="%sspots/%s/" tabindex="-1" aria-hidden="true">'
                 '<span>≈</span></a>' % (prefix, esc(slug)))
+    file, w, h = media.tile(p)
     return ('<a class="row-photo" href="%sspots/%s/" tabindex="-1" aria-hidden="true">'
             '<img src="%sassets/img/%s" alt="" width="%d" height="%d" loading="lazy" decoding="async" '
             'style="object-position:%s"></a>'
-            % (prefix, esc(slug), prefix, esc(p["file"]), p["w"], p["h"], esc(p["pos"])))
+            % (prefix, esc(slug), prefix, esc(file), w, h, esc(p["pos"])))
 
 
 def _photo_credits(payload):

@@ -180,11 +180,63 @@ class Photos(unittest.TestCase):
         for slug in ("swamis", "grandview", "beacons", "blacks", "oceanside"):
             self.assertIsNotNone(media.photo(slug), slug)
 
+    @staticmethod
+    def jpeg_size(path):
+        """(width, height) from a JPEG's start-of-frame marker; no imaging library needed."""
+        with open(path, "rb") as f:
+            data = f.read()
+        i = 2
+        while i < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2):
+                h, w = int.from_bytes(data[i + 5:i + 7], "big"), int.from_bytes(data[i + 7:i + 9], "big")
+                return w, h
+            i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+        raise ValueError("no frame header in %s" % path)
+
     def test_photo_files_exist_and_stay_web_sized(self):
         for slug, p in media.PHOTOS.items():
             path = os.path.join(self.IMG_DIR, p["file"])
             self.assertTrue(os.path.exists(path), path)
             self.assertLess(os.path.getsize(path), 600 * 1024, "%s is too heavy for a web page" % p["file"])
+
+    def test_the_recorded_size_of_every_photo_is_its_real_size(self):
+        # the page sets width and height from media.py to stop the layout jumping as images load
+        for slug, p in media.PHOTOS.items():
+            real = self.jpeg_size(os.path.join(self.IMG_DIR, p["file"]))
+            self.assertEqual(real, (p["w"], p["h"]), slug)
+
+    def test_every_photo_has_a_small_tile_copy_of_the_right_shape(self):
+        for slug, p in media.PHOTOS.items():
+            name, w, h = media.tile(p)
+            path = os.path.join(self.IMG_DIR, name)
+            self.assertTrue(os.path.exists(path), path)
+            self.assertLess(os.path.getsize(path), 90 * 1024, "%s tile is not small" % name)
+            real_w, real_h = self.jpeg_size(path)
+            self.assertEqual(real_w, w, name)
+            self.assertLessEqual(abs(real_h - h), 1, name)      # image tools round the height either way
+            self.assertLessEqual(w, p["w"])
+
+    def test_tile_never_upscales_and_keeps_the_aspect_ratio(self):
+        small = {"file": "x.jpg", "w": 300, "h": 200}
+        self.assertEqual(media.tile(small), ("x-sm.jpg", 300, 200))
+        big = {"file": "y.jpg", "w": 1600, "h": 800}
+        self.assertEqual(media.tile(big), ("y-sm.jpg", 480, 240))
+
+    def test_every_photo_has_a_unique_file_and_a_unique_source(self):
+        files = [p["file"] for p in media.PHOTOS.values()]
+        sources = [p["source"] for p in media.PHOTOS.values()]
+        self.assertEqual(len(set(files)), len(files))
+        self.assertEqual(len(set(sources)), len(sources))
+
+    def test_a_break_without_a_photo_falls_back_cleanly(self):
+        self.assertIn("row-photo-plain", render._thumb("no-such-break-has-this-slug", ""))
+        bg, credit = render._hero_bg("no-such-break-has-this-slug", "")
+        self.assertIn("hero-bg-plain", bg)
+        self.assertEqual(credit, "")
 
     def test_no_raw_downloads_are_left_in_the_assets(self):
         self.assertEqual([f for f in os.listdir(self.IMG_DIR) if f.startswith("raw-")], [])
@@ -215,9 +267,13 @@ class Photos(unittest.TestCase):
         payload = sitegen.make_payload(make_inputs(now, spots=(0, 1, 2, 3, 4)), now)
         index = render.index_page(payload)
         self.assertIn('class="photo-credit"', index)
-        for p in media.PHOTOS.values():
-            self.assertIn(p["author"], index)
-            self.assertIn(p["licence"][1], index)
+        # the footer credits the photos of the breaks on the page, plus the hero's
+        shown = {s["slug"] for s in payload["spots"]} | {media.HERO_SLUG}
+        for slug in shown:
+            p = media.PHOTOS[slug]
+            self.assertIn(p["author"], index, slug)
+            self.assertIn(p["licence"][1], index, slug)
+            self.assertIn(render.esc(p["source"]), index, slug)
 
     def test_share_preview_image_is_absolute(self):
         now = at(0, 10)
@@ -233,6 +289,7 @@ class Photos(unittest.TestCase):
             sitegen.build(make_inputs(now), now, out)
             for p in media.PHOTOS.values():
                 self.assertTrue(os.path.exists(os.path.join(out, "assets", "img", p["file"])), p["file"])
+                self.assertTrue(os.path.exists(os.path.join(out, "assets", "img", media.tile(p)[0])), p["file"])
 
 
 class Build(unittest.TestCase):

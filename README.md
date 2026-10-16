@@ -20,7 +20,7 @@ in GitHub Actions on a schedule.
   the *next* scheduled check and warns you early.
 - **De-duplicated alerts** with state kept in the GitHub Actions cache, plus a
   daily digest and a heartbeat footer.
-- **306 unit tests** covering the scoring, tide interpolation, scheduling clock, and
+- **313 unit tests** covering the scoring, tide interpolation, scheduling clock, and
   feed parsing, run in CI on every push. See [`ROADMAP.md`](ROADMAP.md) for the
   review and what's planned next.
 
@@ -166,8 +166,9 @@ A static site, rebuilt on every scheduled run and deployed to GitHub Pages:
   can read *and post* to it. Names carry a random suffix (see `config.py`) to avoid
   collisions, and the workflow only publishes to them from scheduled runs.
 - **Open data** — the same numbers are published as `data/latest.json`.
-- **Photos** — a full-bleed photo behind the home hero and each spot page, and a thumbnail
-  beside every spot name. They're Creative Commons images from Wikimedia Commons; the file,
+- **Photos** — a full-bleed photo behind the home hero and each break's page, and a thumbnail
+  beside every break name (a small 480 px copy, so the tiles stay light). 25 of the 27 breaks have
+  one; the other two show a plain tile until a free-licensed photo turns up. They're Creative Commons images from Wikimedia Commons; the file,
   crop point and licence for each live in [`sitegen/media.py`](sitegen/media.py), the credits are
   printed on the page and in the footer, and a test fails if a spot is missing a photo or a credit.
   Images are resized to web weight (under ~500 KB each) and the slow zoom stops for visitors who

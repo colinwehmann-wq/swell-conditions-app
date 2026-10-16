@@ -319,6 +319,38 @@ def _matrix(payload, spots=None):
     )
 
 
+def _typical_line(t):
+    hour = "%d %s" % (t["hour"] % 12 or 12, "AM" if t["hour"] < 12 else "PM")
+    return ('<li>%s about %s ft at %d s, swell from the %s (%d°), %d kt wind, a %s ft tide, '
+            'usually best around %s</li>'
+            % (chip(t["rating"], words.rating_band(t["rating"]), t["label"], "chip-pill"),
+               _f(t["size_ft"]), round(t["period_s"]), esc(t["swell_dir"]), t["swell_dir_deg"], t["wind_kn"],
+               _f(t["tide_ft"]), hour))
+
+
+def _rated_section(spot):
+    """What the numbers mean *here*: the typical conditions on this break's own 7 and 9 days."""
+    b = spot.get("benchmark")
+    if not b:
+        return ""
+    rows = []
+    for rating in ("9", "7"):
+        t = b["typical"].get(rating)
+        if t:
+            rows.append(_typical_line(dict(t, rating=float(rating) + 0.5)))
+    if not rows:
+        return ""
+    return (
+        '<section class="sec"><div class="wrap"><h2>How %s is rated</h2>'
+        '<p class="sec-lede">Ratings are measured against this break\'s own best days, from %d years of NOAA buoy, wind and '
+        'tide records. A 9 or better has turned up about %d days a year here, a 7 or better about %d.</p>'
+        '<ul class="plain likes">%s</ul>'
+        '<p class="note">Typical conditions at the best hour of those days, measured at the offshore buoy, so wave size at '
+        'the beach will look different.</p></div></section>'
+        % (esc(spot["name"]), b["years"], round(b["days_per_year"]["9"]), round(b["days_per_year"]["7"]), "".join(rows))
+    )
+
+
 def _legend():
     items = [(9.5, "9 and up"), (8.5, "8 to 8.9"), (7.5, "7 to 7.9"), (6.5, "6 to 6.9"),
              (5.5, "5 to 5.9"), (4.5, "4 to 4.9"), (3.5, "3 to 3.9"), (2.0, "below 3")]
@@ -580,6 +612,7 @@ def spot_page(spot, payload):
            ideal["swell_dir_deg"][0], ideal["swell_dir_deg"][1], _f(ideal["height_ft"][0]), _f(ideal["height_ft"][1]),
            ideal["period_min_s"], ideal["period_ideal_s"], _f(ideal["tide_ft"][0]), _f(ideal["tide_ft"][1]), ideal["wind_max_kn"])
     )
+    likes += _rated_section(spot)
     alerts = (
         '<section id="alerts" class="sec"><div class="wrap"><h2>Get %s alerts</h2>'
         '<p class="sec-lede">One notification when %s is worth paddling out for. Needs the free '

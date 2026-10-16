@@ -109,3 +109,31 @@ class Gradient(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BreakPage(unittest.TestCase):
+    """The 'how this break is rated' section on each break's page."""
+
+    def test_benchmark_payload_and_section(self):
+        import config
+        from sitegen import render
+        from sitegen.build import _benchmark
+        cfg = config.spot_config([s for s in config.SPOTS if s["slug"] == "swamis"][0])
+        b = _benchmark(cfg["benchmark"])
+        self.assertEqual(b["typical"]["9"]["label"], "Epic")
+        self.assertEqual(b["typical"]["7"]["label"], "Good")
+        html = render._rated_section({"name": "Swami's", "benchmark": b})
+        self.assertIn("How Swami&#x27;s is rated", html)
+        self.assertIn("Epic", html)
+        self.assertIn("Good", html)
+        self.assertIn("kt wind", html)
+
+    def test_no_benchmark_no_section(self):
+        from sitegen import render
+        self.assertEqual(render._rated_section({"name": "X", "benchmark": None}), "")
+        self.assertEqual(render._rated_section({"name": "X"}), "")
+
+    def test_every_break_has_a_benchmark(self):
+        import config
+        for s in config.SPOTS:
+            self.assertIn("benchmark", config.spot_config(s), s["slug"])

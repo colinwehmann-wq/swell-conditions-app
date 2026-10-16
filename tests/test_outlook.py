@@ -18,7 +18,7 @@ CFG = {
     "offshore_dir_deg": [40, 110],
     "wind_ideal_kn": 6.0, "wind_max_kn": 12.0,
     "tide_ok_ft": [0.5, 5.0], "tide_ideal_ft": [1.5, 4.0],
-    "alert_score_min": 66,
+    "alert_score_min": 70,
 }
 
 DAY0 = datetime.date(2026, 10, 13)
@@ -65,7 +65,9 @@ class Outlook(unittest.TestCase):
     def test_good_day_scores_high_and_has_a_window(self):
         marine, wind = forecast(10)
         day = self.run_outlook(at(0, 20), marine, wind)[0]
-        self.assertGreater(day["rating_score"], 90)
+        # a good day, not a peak one: 14 s and a size off the middle of the band can't earn full marks
+        self.assertGreater(day["rating_score"], 80)
+        self.assertLess(day["rating_score"], 95)
         self.assertIsNotNone(day["window"])
 
     def test_failed_gate_caps_the_day(self):

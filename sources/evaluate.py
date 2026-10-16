@@ -8,8 +8,27 @@ M_TO_FT = 3.28084
 # Relative importance of each factor in the 0-100 score.
 WEIGHTS = {"height": 0.34, "period": 0.24, "swell_dir": 0.14, "wind": 0.20, "tide": 0.08}
 
-# When a hard gate fails, the displayed rating is capped here (-> "red").
-RATING_GATE_CAP = 48.0
+# Bump this whenever the scoring maths changes: the per-break rating anchors in benchmarks.json
+# were measured with it, and a test refuses to run if they're stale (see sources/climate.py).
+SCORING_VERSION = 2
+
+# When a hard gate fails (too small, too short, blown out) the rating is capped here: "Poor" at
+# best, however good the other factors look.
+RATING_GATE_CAP = 39.0
+
+# --- how a raw score becomes a 1-10 rating --------------------------------------------------
+# The raw score says how close conditions are to a break's *peak*: full marks need the longest
+# period, the middle of the break's best size band, the centre of its swell window and its best
+# tide, not just "inside the ideal range". That is what keeps a 10 rare. The raw score is then
+# ranked against that break's own history (benchmarks.json), so every break's rating means the
+# same thing: a 7 is better than 90% of the days it has had, a 10 better than 99.5%.
+RATING_PERCENTILES = [0, 20, 35, 50, 65, 80, 90, 95, 98, 99.5]      # -> rating 1, 2, ... 10
+PEAK_PERIOD_EXTRA_S = 5.0      # the period that earns full marks sits this far above "ideal"
+PEAK_PERIOD_CAP_S = 20.0
+PEAK_PERIOD_SHARE = 0.20       # share of the period score that only the longest swells earn
+SIZE_PEAK_WEIGHT = 0.15        # how much being off the middle of the size band costs
+TIDE_PEAK_WEIGHT = 0.10
+DIR_PEAK_WEIGHT = 0.10         # how much being at the edge of the swell window costs
 
 
 # --------------------------------------------------------------------------- math
@@ -80,16 +99,69 @@ def _wind_score(speed_kn, dir_deg, cfg):
 
 # ----------------------------------------------------------------------- scoring
 
-def score(height_ft, period_s, swell_dir, wind_kn, wind_dir, tide_ft, cfg):
+def _toward_centre(x, lo, hi, weight):
+    """1.0 at the middle of [lo, hi], easing to 1 - weight at its edges and beyond. Inside a break's
+    'ideal' band every size used to score the same; this is what makes the middle of it the peak."""
+    half = max((hi - lo) / 2.0, 0.5)
+    return 1.0 - weight * min(1.0, abs(x - (lo + hi) / 2.0) / half)
+
+
+def _period_score(period_s, cfg):
+    """Climbs to 80% at the 'ideal' period, then the last 20% is only for the longest swells."""
+    ideal = cfg["period_ideal_s"]
+    peak = min(PEAK_PERIOD_CAP_S, ideal + PEAK_PERIOD_EXTRA_S)
+    return ((1.0 - PEAK_PERIOD_SHARE) * _ramp(period_s, cfg["period_min_s"], ideal)
+            + PEAK_PERIOD_SHARE * _ramp(period_s, ideal, peak))
+
+
+def _swell_dir_score(deg, cfg):
+    lo, hi = cfg["swell_dir_deg"]
+    s = _dir_score(deg, lo, hi)
+    if deg is not None and _in_arc(deg, lo, hi):
+        half = max(((hi - lo) % 360) / 2.0, 1.0)
+        s = 1.0 - DIR_PEAK_WEIGHT * min(1.0, _ang_dist(deg, _arc_center(lo, hi)) / half)
+    return s
+
+
+def raw_score(height_ft, period_s, swell_dir, wind_kn, wind_dir, tide_ft, cfg):
+    """(0-100 closeness to this break's peak conditions, per-factor sub-scores). Not yet ranked
+    against the break's history: see `score`."""
     sub = {
-        "height": _band(height_ft, cfg["height_ok_ft"], cfg["height_ideal_ft"]) if height_ft is not None else 0.0,
-        "period": _ramp(period_s, cfg["period_min_s"], cfg["period_ideal_s"]) if period_s is not None else 0.0,
-        "swell_dir": _dir_score(swell_dir, *cfg["swell_dir_deg"]),
+        "height": (_band(height_ft, cfg["height_ok_ft"], cfg["height_ideal_ft"])
+                   * _toward_centre(height_ft, *cfg["height_ideal_ft"], SIZE_PEAK_WEIGHT)) if height_ft is not None else 0.0,
+        "period": _period_score(period_s, cfg) if period_s is not None else 0.0,
+        "swell_dir": _swell_dir_score(swell_dir, cfg),
         "wind": _wind_score(wind_kn, wind_dir, cfg),
-        "tide": _band(tide_ft, cfg["tide_ok_ft"], cfg["tide_ideal_ft"]) if tide_ft is not None else 0.5,
+        "tide": (_band(tide_ft, cfg["tide_ok_ft"], cfg["tide_ideal_ft"])
+                 * _toward_centre(tide_ft, *cfg["tide_ideal_ft"], TIDE_PEAK_WEIGHT)) if tide_ft is not None else 0.5,
     }
     total = sum(sub[k] * WEIGHTS[k] for k in WEIGHTS) * 100.0
     return total, sub
+
+
+def to_rating_score(raw, anchors):
+    """Turn a raw score into rating x 10 by ranking it against the break's own history.
+
+    `anchors` are the raw scores at RATING_PERCENTILES (ascending, one per rating 1..10) measured
+    over years of that break's daily bests; between two anchors the rating is interpolated, below
+    the first it's 1 and above the last it's 10. With no anchors the raw score stands as it is.
+    """
+    if not anchors:
+        return raw
+    if raw <= anchors[0]:
+        return 10.0
+    for i in range(1, len(anchors)):
+        if raw <= anchors[i]:
+            span = anchors[i] - anchors[i - 1]
+            frac = (raw - anchors[i - 1]) / span if span > 0 else 1.0
+            return (i + frac) * 10.0
+    return 100.0
+
+
+def score(height_ft, period_s, swell_dir, wind_kn, wind_dir, tide_ft, cfg):
+    """(rating x 10, per-factor sub-scores): the raw score ranked against this break's history."""
+    raw, sub = raw_score(height_ft, period_s, swell_dir, wind_kn, wind_dir, tide_ft, cfg)
+    return to_rating_score(raw, cfg.get("rating_anchors")), sub
 
 
 def _gates_ok(height_ft, period_s, wind_kn, wind_dir, cfg):

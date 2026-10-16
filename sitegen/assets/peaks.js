@@ -15,7 +15,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var STRONG = 66;      // same bar as a GO
+  var STRONG = 70;      // same bar as a GO (a 7)
   var RIDEABLE = 50;
 
   function ahead(peaks, nowMs) {

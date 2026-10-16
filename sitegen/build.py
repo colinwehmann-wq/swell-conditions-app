@@ -42,7 +42,7 @@ def _cap(s):
 def _band(score):
     r = words.rating(score)
     band = words.rating_band(r)
-    return {"rating": r, "band": band, "label": words.RATING_WORD[band].title()}
+    return {"rating": r, "band": band, "label": words.rating_label(r)}
 
 
 def _conditions(cond, tide_state, cfg):
@@ -211,7 +211,7 @@ def _is_daylight(items, now):
     return True
 
 
-PEAK_STRONG = 66.0      # same bar as a GO
+PEAK_STRONG = 70.0      # same bar as a GO (a 7)
 PEAK_RIDEABLE = 50.0
 PEAKS_PER_DAY = 5
 

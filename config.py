@@ -11,6 +11,9 @@ Edit SPOTS to add/remove breaks or tune what "ideal" means for each one.
 Any key in DEFAULTS can be overridden per spot.
 """
 
+import json
+import os
+
 TIMEZONE = "America/Los_Angeles"
 
 # Local wall-clock times the checker runs. Used only to answer "is a good window
@@ -59,7 +62,7 @@ DEFAULTS = {
     "tide_ideal_ft":    [1.5, 4.0],
 
     # Score 0-100 at/above which the spot is a GO and worth a push.
-    "alert_score_min":  66,
+    "alert_score_min":  70,
 
     # NOAA CO-OPS tide station (9410230 = La Jolla; tide is ~identical up the
     # North County coast, offsets of only a couple of minutes).
@@ -338,9 +341,29 @@ SPOTS = [
 ]
 
 
+_BENCHMARKS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "benchmarks.json")
+_anchor_cache = {}
+
+
+def _anchors():
+    """{slug: anchors} from benchmarks.json (see tools/build_benchmarks.py). Missing file means
+    every break falls back to the plain 0-100 score, so a fresh checkout still works."""
+    if "anchors" not in _anchor_cache:
+        try:
+            with open(_BENCHMARKS) as f:
+                data = json.load(f)
+            _anchor_cache["anchors"] = {slug: b["anchors"] for slug, b in data["breaks"].items()}
+        except (OSError, ValueError, KeyError):
+            _anchor_cache["anchors"] = {}
+    return _anchor_cache["anchors"]
+
+
 def spot_config(spot):
     """Merge a SPOTS entry over DEFAULTS and attach its public ntfy topic."""
     cfg = dict(DEFAULTS)
     cfg.update(spot)
+    anchors = _anchors().get(cfg["slug"])
+    if anchors:
+        cfg["rating_anchors"] = anchors
     cfg["ntfy_topic"] = public_topic(cfg["slug"])
     return cfg

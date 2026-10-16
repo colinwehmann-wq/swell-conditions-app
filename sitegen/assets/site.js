@@ -4,6 +4,19 @@
 
   var root = document.documentElement;
 
+  /* ---- the home page opens at the top ----
+     Phones remember where you were scrolled and put you back there when you reopen the tab,
+     which on a long page lands you in the middle of the week. A link to a section (#hash) and
+     the Back button are left alone. */
+  if (document.body.classList.contains('home') && !location.hash) {
+    var nav = window.performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    if (!(nav && nav.type === 'back_forward')) {
+      var top = function () { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); };   /* the page smooth-scrolls by default */
+      top();
+      window.addEventListener('load', function () { top(); setTimeout(top, 60); });
+    }
+  }
+
   /* ---- theme: system -> light -> dark ---- */
   function choice() {
     try { return localStorage.getItem('theme') || 'system'; } catch (e) { return 'system'; }

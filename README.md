@@ -20,7 +20,7 @@ in GitHub Actions on a schedule.
   the *next* scheduled check and warns you early.
 - **De-duplicated alerts** with state kept in the GitHub Actions cache, plus a
   daily digest and a heartbeat footer.
-- **214 unit tests** covering the scoring, tide interpolation, scheduling clock, and
+- **241 unit tests** covering the scoring, tide interpolation, scheduling clock, and
   feed parsing, run in CI on every push. See [`ROADMAP.md`](ROADMAP.md) for the
   review and what's planned next.
 
@@ -148,6 +148,10 @@ and NDBC feed parsing. Runs on every push via `.github/workflows/tests.yml`.
 A static site, rebuilt on every scheduled run and deployed to GitHub Pages:
 
 - **Right now** — five breaks ranked by rating, each with a "what to bring" pick
+- **A headline that keeps up** — the top of the page names the next peak worth catching and
+  moves on to the following one the moment the clock passes it, without waiting for a rebuild
+  (the page carries every upcoming peak and picks from the visitor's own clock; the pick is
+  written in both Python and JavaScript and a test keeps the two identical)
 - **Week ahead** — a 7-day matrix of the best daylight hour per spot, with size ranges
 - **Spot pages** — an hour-by-hour chart (with a table view), the next 7 days, what
   the break likes, and a subscribe button

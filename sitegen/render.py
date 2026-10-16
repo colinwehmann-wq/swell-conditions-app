@@ -6,6 +6,7 @@ ships as icon + number + label, never colour alone.
 """
 import datetime
 import html
+import json
 from urllib.parse import urlparse
 
 from . import media
@@ -176,6 +177,15 @@ def _footer(payload):
     )
 
 
+def _json_for_script(obj):
+    """JSON safe to place inside a <script> element: nothing in it can close the tag or open a comment."""
+    text = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+    for raw, safe in (("<", "\\u003c"), (">", "\\u003e"), ("&", "\\u0026"),
+                      (" ", "\\u2028"), (" ", "\\u2029")):
+        text = text.replace(raw, safe)
+    return text
+
+
 def _og_image(payload, slug):
     p = media.photo(slug)
     if not p:
@@ -184,7 +194,7 @@ def _og_image(payload, slug):
     return '<meta property="og:image" content="%s"><meta name="twitter:card" content="summary_large_image">' % esc(url)
 
 
-def _shell(title, description, body, prefix, payload, extra_class="", og_slug=None):
+def _shell(title, description, body, prefix, payload, extra_class="", og_slug=None, scripts=()):
     return (
         '<!doctype html><html lang="en"><head>'
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -198,9 +208,10 @@ def _shell(title, description, body, prefix, payload, extra_class="", og_slug=No
         '<body class="%s"><a class="skip" href="#main">Skip to content</a>%s'
         '<main id="main">%s</main>%s'
         '<div id="tip" class="tip" role="tooltip" hidden></div>'
-        '<script src="%sassets/site.js" defer></script></body></html>'
+        '%s<script src="%sassets/site.js" defer></script></body></html>'
         % (esc(title), esc(description), esc(title), esc(description), _og_image(payload, og_slug), _FAVICON, _THEME_BOOT,
-           prefix, esc(extra_class), _header(prefix), body, _footer(payload), prefix)
+           prefix, esc(extra_class), _header(prefix), body, _footer(payload),
+           "".join('<script src="%sassets/%s" defer></script>' % (prefix, esc(s)) for s in scripts), prefix)
     )
 
 
@@ -336,21 +347,29 @@ def timeline_chart(spot, now_iso):
 def index_page(payload):
     h = payload["headline"]
     spots = {s["slug"]: s for s in payload["spots"]}
-    lead = spots.get(h.get("slug"))
-    figure = ""
-    if lead:
-        figure = (
-            '<a class="hero-fig" href="spots/%s/"><span class="fig-num">%.1f</span>'
-            '<span class="fig-meta">%s<span class="fig-name">%s</span></span></a>'
-            % (esc(lead["slug"]), lead["rating"], chip(lead["rating"], lead["band"], lead["label"], "chip-pill"), esc(lead["name"])))
+    # The big number is the rating the headline is about (a coming peak's, or right now's). It is
+    # always in the page, hidden when there's nothing to show, so the script can fill it in later.
+    fig = h.get("fig")
+    figure = (
+        '<a class="hero-fig" data-hero="fig" href="%s"%s><span class="fig-num" data-hero="num">%s</span>'
+        '<span class="fig-meta">%s<span class="fig-name" data-hero="name">%s</span></span></a>'
+        % ("spots/%s/" % esc(fig["slug"]) if fig else "./", "" if fig else " hidden",
+           "%.1f" % fig["rating"] if fig else "",
+           chip(fig["rating"], fig["band"], fig["label"], "chip-pill") if fig
+           else chip(0, "red", "", "chip-pill"),
+           esc(fig["name"]) if fig else ""))
     bg, credit = _hero_bg(media.HERO_SLUG, "")
     hero = (
-        '<section class="hero%s">%s<div class="wrap hero-in"><div class="hero-text">'
-        '<p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
+        '<section class="hero%s" data-hero="root" data-anchor="%s">%s<div class="wrap hero-in">'
+        '<div class="hero-text" aria-live="polite">'
+        '<p class="kicker" data-hero="kicker">%s</p><h1 data-hero="title">%s</h1>'
+        '<p class="lede" data-hero="sub">%s</p>'
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · '
         'Live NOAA buoys, tides and a 7-day forecast</p></div>%s</div>%s</section>'
-        % (" has-photo" if bg else "", bg, esc(h["kicker"]), esc(h["title"]), esc(h["sub"]),
-           esc(payload["generated"]), esc(payload["generated_label"]), figure, credit)
+        '<script type="application/json" id="peaks-data">%s</script>'
+        % (" has-photo" if bg else "", esc(h.get("anchor") or ""), bg, esc(h["kicker"]), esc(h["title"]),
+           esc(h["sub"]), esc(payload["generated"]), esc(payload["generated_label"]), figure, credit,
+           _json_for_script(payload.get("peaks", [])))
     )
     ranked = "".join(_spot_row(spots[slug]) for slug in payload["ranking"])
     now_sec = (
@@ -401,7 +420,8 @@ def index_page(payload):
     )
     return _shell("Swell Check — surf conditions for North County San Diego",
                   "Live surf conditions, a 7-day outlook and opt-in alerts for Swami's, Grandview, Beacon's, Blacks and Oceanside Harbor.",
-                  hero + now_sec + week + boards + alerts + how, "", payload, "home", media.HERO_SLUG)
+                  hero + now_sec + week + boards + alerts + how, "", payload, "home", media.HERO_SLUG,
+                  scripts=("peaks.js",))
 
 
 def spot_page(spot, payload):

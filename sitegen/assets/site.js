@@ -104,4 +104,77 @@
       el.textContent = 'Updated ' + text;
     }
   });
+
+  /* ---- top of the page: move on to the next peak once the one on show has passed ----
+     The page is rebuilt a few times a day, so its headline would otherwise keep naming a time
+     that has already gone. The page carries every upcoming peak (#peaks-data) and
+     data-anchor says when the text it was built with stops being true; after that this
+     re-picks from the visitor's clock using SwellPeaks (assets/peaks.js). Text only, never
+     innerHTML. With no script, or if anything here fails, the built text simply stays. */
+  var hero = document.querySelector('[data-hero="root"]');
+  var feed = document.getElementById('peaks-data');
+  if (hero && feed && window.SwellPeaks) {
+    var peaks = [];
+    try { peaks = JSON.parse(feed.textContent) || []; } catch (e) { peaks = []; }
+    var part = function (name) { return hero.querySelector('[data-hero="' + name + '"]'); };
+    var ICON = { green: '✓', yellow: '!', red: '✕' };
+    var CLS = { green: 'chip-good', yellow: 'chip-ok', red: 'chip-poor' };
+    var timer = null;
+
+    var pacificDate = function (ms) {
+      try {
+        return new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(new Date(ms));
+      } catch (e) { return null; }
+    };
+
+    var showHeadline = function (h) {
+      part('kicker').textContent = h.kicker;
+      part('title').textContent = h.title;
+      part('sub').textContent = h.sub;
+      var fig = part('fig');
+      if (!h.fig) { fig.hidden = true; return; }
+      fig.hidden = false;
+      fig.setAttribute('href', 'spots/' + encodeURIComponent(h.fig.slug) + '/');
+      part('num').textContent = h.fig.rating.toFixed(1);
+      part('name').textContent = h.fig.name;
+      var chip = fig.querySelector('.chip');
+      chip.className = 'chip chip-pill ' + CLS[h.fig.band];
+      chip.querySelector('.chip-ico').textContent = ICON[h.fig.band];
+      chip.querySelector('.chip-num').textContent = h.fig.rating.toFixed(1);
+      chip.querySelector('.chip-lbl').textContent = h.fig.label;
+    };
+
+    var anchorMs = function () { return Date.parse(hero.getAttribute('data-anchor') || ''); };
+
+    var schedule = function (atMs, nowMs) {
+      if (timer) clearTimeout(timer);
+      // a second past the moment, and never longer than a timer can hold
+      var wait = Math.min(Math.max(atMs - nowMs + 1000, 1000), 2147483000);
+      timer = setTimeout(function () { update(Date.now()); }, wait);
+    };
+
+    var update = function (nowMs) {
+      var anchor = anchorMs();
+      if (!isNaN(anchor) && nowMs < anchor) { schedule(anchor, nowMs); return; }   // still true
+      var today = pacificDate(nowMs);
+      if (!today) return;
+      var h = window.SwellPeaks.headline(peaks, nowMs, today);
+      showHeadline(h);
+      hero.setAttribute('data-anchor', h.anchor ? new Date(h.anchor).toISOString() : '');
+      if (h.anchor) schedule(h.anchor, nowMs);
+    };
+
+    // Timers are throttled in background tabs and stop while a laptop sleeps, so also look again
+    // every minute and whenever the tab comes back.
+    var recheck = function () {
+      var anchor = anchorMs();
+      if (isNaN(anchor) || Date.now() >= anchor) update(Date.now());
+    };
+    setInterval(recheck, 60000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) recheck(); });
+    window.SwellHero = { update: update };    // lets a test set the clock
+    update(Date.now());
+  }
 })();

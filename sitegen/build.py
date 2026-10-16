@@ -195,7 +195,66 @@ def _is_daylight(items, now):
     return True
 
 
-def _headline(items, now):
+PEAK_STRONG = 66.0      # same bar as a GO
+PEAK_RIDEABLE = 50.0
+
+
+def _peaks(items):
+    """Every spot's best hour on every forecast day, soonest first. The page carries this list
+    so the headline can roll over to the next peak as the clock passes the one on show; the
+    wording is precomputed here so the browser only has to choose. See sitegen/assets/peaks.js."""
+    found = []
+    for item in items:
+        cfg = item["result"]["cfg"]
+        for d in item["outlook"]:
+            best = d["best"]
+            h, p = best["cond"][0], best["cond"][1]
+            lo, hi = d["height_range_ft"]
+            found.append((best["time"], {
+                "slug": cfg["slug"],
+                "name": cfg["name"],
+                "date": d["date"].isoformat(),
+                "time": _iso(best["time"]),
+                "time_label": clock(best["time"]),
+                "weekday": d["date"].strftime("%A"),
+                "score": _r(d["rating_score"], 1),
+                **_band(d["rating_score"]),
+                "sub": "%s, %s. About %s–%s ft." % (_cap(words.size_words(h)), words.power_words(p),
+                                                    _r(lo), _r(hi)),
+            }))
+    return [p for _t, p in sorted(found, key=lambda x: x[0])]
+
+
+def pick_next_peak(peaks, now):
+    """The peak the headline should name at `now`: the earliest day that still has a strong
+    peak ahead (best spot that day), else the best rideable one, else None. Mirrors
+    `pick` in sitegen/assets/peaks.js, which tests/test_peaks_js.py checks it against."""
+    ahead = [p for p in peaks if datetime.datetime.fromisoformat(p["time"]) > now]
+    strong = [p for p in ahead if p["score"] >= PEAK_STRONG]
+    if strong:
+        return min(strong, key=lambda p: (p["date"], -p["score"], datetime.datetime.fromisoformat(p["time"])))
+    ok = [p for p in ahead if p["score"] >= PEAK_RIDEABLE]
+    if ok:
+        return min(ok, key=lambda p: (-p["score"], datetime.datetime.fromisoformat(p["time"])))
+    return None
+
+
+def peak_title(p, lead_days):
+    """Mirrors `title` in peaks.js."""
+    if lead_days == 0:
+        return "Today, %s peaks around %s." % (p["name"], p["time_label"])
+    if lead_days == 1:
+        return "Tomorrow is the one — %s peaks around %s." % (p["name"], p["time_label"])
+    return "Not today. Best bet: %s at %s." % (p["weekday"], p["name"])
+
+
+def _fig(slug, name, rating, band, label):
+    return {"slug": slug, "name": name, "rating": rating, "band": band, "label": label}
+
+
+def _headline(items, now, peaks):
+    """What the top of the page says, plus `fig` (the big rating beside it) and `anchor` (the
+    moment this text goes stale: the page then swaps in the next peak itself)."""
     results = [i["result"] for i in items]
     daylight = _is_daylight(items, now)
 
@@ -206,10 +265,13 @@ def _headline(items, now):
         h, p, _sd, wk, wd, _tf = r["now_cond"]
         sub = "%s, %s. %s." % (_cap(words.size_words(h)), words.power_words(p),
                                _cap(words.wind_words(wk, wd, cfg)))
-        if r["window"] and r["window_day"] == "today":
-            sub += " Good until about %s." % hour_label(r["window"]["end"])
+        w = r["window"] if r["window_day"] == "today" else None
+        if w:
+            sub += " Good until about %s." % hour_label(w["end"])
         return {"kicker": "Right now · %s" % clock(now), "title": "%s is the pick." % cfg["name"],
-                "sub": sub, "slug": cfg["slug"]}
+                "sub": sub, "slug": cfg["slug"],
+                "fig": _fig(cfg["slug"], cfg["name"], **_band(r["rating_score"])),
+                "anchor": _iso(w["end"] if w else now + datetime.timedelta(hours=1))}
 
     later = [r for r in results if r["verdict"] == "LATER" and r["window"] and daylight]
     if later:
@@ -220,52 +282,40 @@ def _headline(items, now):
             "title": "Nothing yet — %s turns on around %s." % (r["cfg"]["name"], clock(w["peak"])),
             "sub": "Best window %s to %s today." % (hour_label(w["start"]), hour_label(w["end"])),
             "slug": r["cfg"]["slug"],
+            "fig": _fig(r["cfg"]["slug"], r["cfg"]["name"], **_band(w["peak_score"])),
+            "anchor": _iso(w["peak"]),
         }
 
-    # Nothing good right now: look ahead. Prefer the *earliest* strong day (rating 6.6+),
-    # otherwise the best of whatever is at least rideable.
-    cands = [(item["result"]["cfg"], d) for item in items for d in item["outlook"]]
-    strong = [c for c in cands if c[1]["rating_score"] >= 66]
-    rideable = [c for c in cands if c[1]["rating_score"] >= 50]
-    if strong:
-        best = min(strong, key=lambda c: (c[1]["date"], -c[1]["rating_score"]))
-    elif rideable:
-        best = max(rideable, key=lambda c: c[1]["rating_score"])
-    else:
-        best = None
+    # Nothing good right now: look ahead to the next peak still in front of us.
+    best = pick_next_peak(peaks, now)
     if best:
-        cfg, d = best
-        peak = clock(d["best"]["time"])
-        h, p = d["best"]["cond"][0], d["best"]["cond"][1]
-        lo, hi = d["height_range_ft"]
-        if d["lead_days"] == 0:
-            title = "Today, %s peaks around %s." % (cfg["name"], peak)
-        elif d["lead_days"] == 1:
-            title = "Tomorrow is the one — %s peaks around %s." % (cfg["name"], peak)
-        else:
-            title = "Not today. Best bet: %s at %s." % (d["date"].strftime("%A"), cfg["name"])
+        lead = (datetime.date.fromisoformat(best["date"]) - now.date()).days
         return {
             "kicker": "Looking ahead",
-            "title": title,
-            "sub": "%s, %s. About %s–%s ft." % (_cap(words.size_words(h)), words.power_words(p), _r(lo), _r(hi)),
-            "slug": cfg["slug"],
+            "title": peak_title(best, lead),
+            "sub": best["sub"],
+            "slug": best["slug"],
+            "fig": _fig(best["slug"], best["name"], best["rating"], best["band"], best["label"]),
+            "anchor": best["time"],
         }
 
     return {"kicker": "Looking ahead", "title": "A flat spell.",
             "sub": "Nothing worth paddling out for this week. We'll tell you when that changes.",
-            "slug": None}
+            "slug": None, "fig": None, "anchor": None}
 
 
 def make_payload(inputs, now):
     """inputs: [{"result", "outlook", "timeline"}, ...] -> JSON-serialisable dict."""
     spots = [_spot(i, now) for i in inputs]
     ranking = sorted(spots, key=lambda s: (_ORDER[s["verdict"]], -s["rating"]))
+    peaks = _peaks(inputs)
     return {
         "generated": now.isoformat(),
         "generated_label": "%s, %s %s" % (now.strftime("%a %b ") + str(now.day), clock(now), now.strftime("%Z")),
         "site_url": config.SITE_URL,
         "repo_url": "https://github.com/colinwehmann-wq/swell-conditions-app",
-        "headline": _headline(inputs, now),
+        "headline": _headline(inputs, now, peaks),
+        "peaks": peaks,
         "ranking": [s["slug"] for s in ranking],
         "spots": spots,
         "digest": _ntfy(config.public_topic("daily")),

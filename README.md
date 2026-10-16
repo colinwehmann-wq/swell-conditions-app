@@ -62,7 +62,7 @@ No dependencies — Python 3.9+ standard library only.
 Per spot, scored 0–100 from five factors (weights in `sources/evaluate.py`):
 wave height in range, swell period, swell direction hitting the break, wind
 (offshore/light), and tide. A spot is **GO** when the score clears
-`alert_score_min` (default 66) **and** it passes hard gates: height in the OK
+`alert_score_min` (default 70, a rating of 7) **and** it passes hard gates: height in the OK
 band, period at or above the minimum, and wind not blown out.
 
 Verdicts: `GO` (on now) · `LATER` (a window opens later today) · `MARGINAL` · `FLAT`.
@@ -76,17 +76,36 @@ window shifts more than an hour, or when it flips to GO).
 
 ### Rating (1–10)
 
-The report and alerts lead with a rating = score ÷ 10, colour-coded:
+The report, alerts and site lead with a 1–10 rating, and it is **per break**: a 10 is the
+best that break gets, so a 7 at Swami's and a 7 at La Jolla Shores are equally good days
+*for each*. It is built in two steps:
 
-| Rating | Colour | Meaning |
-|--------|--------|---------|
-| **7.6–10** | 🟢 green | genuinely good — go |
-| **5.0–7.5** | 🟡 yellow | rideable / marginal |
-| **1.0–4.9** | 🔴 red | not worth it |
+1. **Raw score (0–100)** from the five factors, with credit that keeps rising toward each
+   break's peak (a longer period than "ideal", the middle of the size band) instead of
+   topping out at "ideal".
+2. **Ranked against the break's own history.** `tools/build_benchmarks.py` replays 12+ years
+   of NOAA buoy, wind and tide records through the break's settings, keeps each day's best
+   hour, and writes the raw scores at fixed percentiles to [`benchmarks.json`](benchmarks.json).
+   Today's raw score is placed on that scale, so a 9 is a top-1-in-50-days kind of day anywhere.
 
-If any hard gate fails (blown out, too small, flat) the rating is capped at 4.8
-(red) no matter how good the swell is — the number in the terminal is also
-ANSI-coloured. Change the cap via `RATING_GATE_CAP` in `sources/evaluate.py`.
+| Rating | Name | Tier |
+|--------|------|------|
+| **9–10** | Epic | 🟢 green |
+| **8–8.9** | Excellent | 🟢 green |
+| **7–7.9** | Good | 🟢 green (GO) |
+| **6–6.9** | Decent | 🟡 yellow |
+| **5–5.9** | Fair | 🟡 yellow |
+| **4–4.9** | Mediocre | 🟠 orange |
+| **3–3.9** | Poor | 🟠 orange |
+| **1–2.9** | Very poor | 🔴 red |
+
+If any hard gate fails (blown out, too small, too short a period) the rating is capped at 3.9
+no matter how good the swell is (`RATING_GATE_CAP` in `sources/evaluate.py`).
+
+The history can't know what a break looks like when it is firing, so *what counts as ideal* at
+each break (its size band, swell window, tide) still comes from `config.py`. After changing any
+of those, or the scoring maths, re-run the tool; a test fails until `benchmarks.json` matches.
+The file also records what a 7 and a 9 have looked like at each break ("typical").
 
 The **peak window** is the longest run of daylight hours that stay above the
 alert score; "best" is the top-scoring hour in it. If nothing qualifies today,
@@ -114,9 +133,9 @@ Console output always. Add channels with environment variables:
 A phone alert reads in plain language, e.g.:
 
 ```
-Swami's: go surf — GOOD, 9/10        ← notification title
+Swami's: go surf — EXCELLENT, 8.8/10        ← notification title
 
-🟢 Swami's looks GOOD (8.8/10)
+🟢 Swami's looks EXCELLENT (8.8/10)
 Waves: chest-high, solid, lined-up swell
 Wind: no wind — glassy and clean
 When: go now — stays good until about 11 AM

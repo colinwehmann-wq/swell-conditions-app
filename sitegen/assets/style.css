@@ -15,6 +15,7 @@
   --btn: #256abf;
   --good: #0ca30c;
   --warn: #fab219;
+  --serious: #ec835a;
   --bad: #d03b3b;
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -136,6 +137,7 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .chip-ico { display: grid; place-items: center; width: 1.45em; height: 1.45em; border-radius: 50%; font-size: 0.82em; font-weight: 700; color: #fff; }
 .chip-good .chip-ico { background: var(--good); }
 .chip-ok .chip-ico { background: var(--warn); color: #0b0b0b; }
+.chip-serious .chip-ico { background: var(--serious); color: #0b0b0b; }
 .chip-poor .chip-ico { background: var(--bad); }
 .chip-num { font-weight: 600; }
 .chip-lbl { color: var(--ink-2); font-size: 0.86em; }
@@ -262,6 +264,7 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .bar { position: relative; width: min(24px, 80%); border-radius: 4px 4px 0 0; }
 .b-good { background: var(--good); }
 .b-ok { background: var(--warn); }
+.b-serious { background: var(--serious); }
 .b-poor { background: var(--bad); }
 .val { position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -3px); font-size: 0.78rem; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .xl { text-align: center; font-size: 0.72rem; color: var(--ink-2); padding-top: 6px; }

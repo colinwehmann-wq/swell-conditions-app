@@ -7,7 +7,13 @@ from . import evaluate
 _COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
                "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
 
-RATING_WORD = {"green": "GOOD", "yellow": "OKAY", "red": "POOR"}
+# The 1-10 scale, best first: (lowest rating in the step, name). Colour only ever groups the
+# eight steps into four tiers (green 7+, yellow 5-6.9, orange 3-4.9, red below 3); it is never
+# the only signal, because every step has a name and a number.
+RATING_STEPS = [
+    (9.0, "Epic"), (8.0, "Excellent"), (7.0, "Good"), (6.0, "Decent"),
+    (5.0, "Fair"), (4.0, "Mediocre"), (3.0, "Poor"), (0.0, "Very poor"),
+]
 
 
 def compass(deg):
@@ -21,13 +27,24 @@ def rating(score):
     return max(1.0, min(10.0, round(score / 10.0, 1)))
 
 
+def rating_label(r):
+    """Name of the step a 1.0-10.0 rating falls in: Epic, Excellent, Good, Decent, Fair, Mediocre,
+    Poor or Very poor."""
+    for floor, name in RATING_STEPS:
+        if r >= floor:
+            return name
+
+
 def rating_band(r):
-    """red < 5, yellow 5-7.5, green > 7.5."""
-    if r < 5.0:
-        return "red"
-    if r <= 7.5:
+    """Colour tier: green 7+ (worth the trip), yellow 5-6.9 (marginal), orange 3-4.9 (weak),
+    red below 3 (not worth paddling out)."""
+    if r >= 7.0:
+        return "green"
+    if r >= 5.0:
         return "yellow"
-    return "green"
+    if r >= 3.0:
+        return "orange"
+    return "red"
 
 
 def size_words(ft):

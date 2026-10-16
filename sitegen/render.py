@@ -1,7 +1,7 @@
 """HTML for the public site.
 
 Plain string templates, no dependencies. Every value that came from data goes
-through `esc`. Ratings are a *status* encoding (good / okay / poor), so each one
+through `esc`. Ratings are a *status* encoding (eight named steps in four colour tiers), so each one
 ships as icon + number + label, never colour alone.
 """
 import datetime
@@ -9,10 +9,12 @@ import html
 import json
 from urllib.parse import urlparse
 
+from sources import words
+
 from . import media
 
-_CLS = {"green": "good", "yellow": "ok", "red": "poor"}
-_ICO = {"green": "✓", "yellow": "!", "red": "✕"}
+_CLS = {"green": "good", "yellow": "ok", "orange": "serious", "red": "poor"}
+_ICO = {"green": "✓", "yellow": "!", "orange": "▼", "red": "✕"}
 
 _BOARD_BLURBS = [
     ("Longboard", "Small or mushy waves. Paddle power and glide do the work."),
@@ -318,13 +320,16 @@ def _matrix(payload, spots=None):
 
 
 def _legend():
-    items = [("green", "Good", "above 7.5"), ("yellow", "Okay", "5 to 7.5"), ("red", "Poor", "below 5")]
+    items = [(9.5, "9 and up"), (8.5, "8 to 8.9"), (7.5, "7 to 7.9"), (6.5, "6 to 6.9"),
+             (5.5, "5 to 5.9"), (4.5, "4 to 4.9"), (3.5, "3 to 3.9"), (2.0, "below 3")]
     return (
         '<ul class="legend" aria-label="Rating key">%s</ul>'
-        '<p class="note">A failed hard gate — blown-out wind, too small, too short a period — caps the day at Poor, '
+        '<p class="note">Each break is rated against its own best: a 10 is the best conditions that break gets, measured '
+        'from over twelve years of buoy, wind and tide history, so a 7 at Swami\'s and a 7 at La Jolla Shores are equally '
+        'good days for each. A failed hard gate — blown-out wind, too small, too short a period — caps the day at Poor, '
         'however good the swell looks. Beyond day 3 the forecast is a rough guide, not a promise.</p>'
-        % "".join('<li>%s <span class="muted">%s</span></li>' % (chip({"green": 9, "yellow": 6.5, "red": 3}[b], b, l, "chip-sm"), r)
-                  for b, l, r in items)
+        % "".join('<li>%s <span class="muted">%s</span></li>'
+                  % (chip(r, words.rating_band(r), words.rating_label(r), "chip-pill"), span) for r, span in items)
     )
 
 
@@ -446,7 +451,7 @@ def index_page(payload):
         '<li><h3>Buoys first</h3><p>Wave size, period and direction come from live NOAA buoy readings. The forecast model is '
         'calibrated to the buoy, so its trend carries through without its coastal bias — and if a buoy goes offline the system says so '
         'and falls back to the model.</p></li>'
-        '<li><h3>Score, then gate</h3><p>Height, period, swell direction, wind and tide become a 0–100 score and a 1–10 rating. '
+        '<li><h3>Score, then gate</h3><p>Height, period, swell direction, wind and tide become a score, and the score becomes a 1–10 rating measured against that break\'s own best days. '
         'Hard gates sit on top: a great swell with a blown-out wind never reads as good.</p></li>'
         '<li><h3>Look ahead</h3><p>A 7-day forecast and NOAA tide predictions find each day\'s best hour and any window worth the trip. '
         'It also warns early when a good window opens before the next check.</p></li>'

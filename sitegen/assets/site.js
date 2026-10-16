@@ -117,8 +117,8 @@
     var peaks = [];
     try { peaks = JSON.parse(feed.textContent) || []; } catch (e) { peaks = []; }
     var part = function (name) { return hero.querySelector('[data-hero="' + name + '"]'); };
-    var ICON = { green: '✓', yellow: '!', red: '✕' };
-    var CLS = { green: 'chip-good', yellow: 'chip-ok', red: 'chip-poor' };
+    var ICON = { green: '✓', yellow: '!', orange: '▼', red: '✕' };
+    var CLS = { green: 'chip-good', yellow: 'chip-ok', orange: 'chip-serious', red: 'chip-poor' };
     var timer = null;
 
     var pacificDate = function (ms) {
@@ -189,8 +189,8 @@
     var results = finder.querySelector('.finder-results');
     var status = finder.querySelector('[data-finder-status]');
     var directory = document.querySelector('[data-directory]');
-    var CHIP = { green: 'chip-good', yellow: 'chip-ok', red: 'chip-poor' };
-    var MARK = { green: '✓', yellow: '!', red: '✕' };
+    var CHIP = { green: 'chip-good', yellow: 'chip-ok', orange: 'chip-serious', red: 'chip-poor' };
+    var MARK = { green: '✓', yellow: '!', orange: '▼', red: '✕' };
     var shown = [];
     var active = -1;
     finder.hidden = false;

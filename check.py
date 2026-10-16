@@ -28,11 +28,11 @@ import config
 import sitegen
 from sources import evaluate, forecast, http, ndbc, notify, tides, verify
 from sources.words import (
-    RATING_WORD as _RATING_WORD,
     compass as _compass,
     power_words as _power_words,
     rating as _rating,
     rating_band as _rating_band,
+    rating_label as _rating_label,
     size_words as _size_words,
     tide_words as _tide_words,
     wind_words as _wind_words,
@@ -200,8 +200,8 @@ def _window_line(res):
         _limiter_phrase(nm["limiter"], nm["cond"], res["cfg"]))
 
 
-_DOT ={"red": "\U0001f534", "yellow": "\U0001f7e1", "green": "\U0001f7e2"}
-_ANSI = {"red": "31", "yellow": "33", "green": "32"}
+_DOT = {"red": "\U0001f534", "orange": "\U0001f7e0", "yellow": "\U0001f7e1", "green": "\U0001f7e2"}
+_ANSI = {"red": "31", "orange": "38;5;208", "yellow": "33", "green": "32"}
 _USE_ANSI = sys.stdout.isatty()
 
 
@@ -287,7 +287,7 @@ def _when_words(res, now):
 def alert_title(res):
     if res["verdict"] == "GO":
         rt = _rating(res["rating_score"])
-        return "%s: go surf — %s, %.0f/10" % (res["name"], _RATING_WORD[_rating_band(rt)], rt)
+        return "%s: go surf — %s, %.1f/10" % (res["name"], _rating_label(rt).upper(), rt)
     w = res["window"]
     rt = _rating(w["peak_score"])
     return "%s: window coming — peak ~%s, %.0f/10" % (res["name"], clock(w["peak"]), rt)
@@ -312,7 +312,7 @@ def format_alert(res, now):
     if res.get("next_check"):
         when += " (next check ~%s)" % clock(res["next_check"])
     lines = [
-        "%s %s looks %s (%.1f/10)" % (_DOT[band], res["name"], _RATING_WORD[band], rt),
+        "%s %s looks %s (%.1f/10)" % (_DOT[band], res["name"], _rating_label(rt).upper(), rt),
         "",
         "Waves: %s%s" % (_size_words(h), (", " + power) if power else ""),
         "Wind: %s" % _wind_words(wk, wd, res["cfg"]),
@@ -340,7 +340,7 @@ def _format_upcoming(res, now):
     power = _power_words(pp)
     lines = [
         "%s %s turns on later — %s at its peak (%.1f/10)" % (
-            _DOT[band], res["name"], _RATING_WORD[band], rt),
+            _DOT[band], res["name"], _rating_label(rt).upper(), rt),
         "",
         "Not yet: right now it's %s" % _cond_line(res["now_cond"], res["tide_state"], res["wind_rel"]),
         "",
@@ -370,7 +370,7 @@ def format_check(res, now):
     b = res["buoy"]
     src = ("buoy %s, %d min old" % (b["buoy"], round(b["age_hours"] * 60))) if b else "no buoy (model only)"
     lines = [
-        "%s %s right now — %s (%.1f/10)" % (_DOT[band], res["name"], _RATING_WORD[band], rt),
+        "%s %s right now — %s (%.1f/10)" % (_DOT[band], res["name"], _rating_label(rt).upper(), rt),
         "",
         "Waves: %s%s" % (_size_words(h), (", " + power) if power else ""),
         "Wind: %s" % _wind_words(wk, wd, res["cfg"]),

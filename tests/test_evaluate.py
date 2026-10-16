@@ -18,7 +18,7 @@ CFG = {
     "offshore_dir_deg": [40, 110],
     "wind_ideal_kn": 6.0, "wind_max_kn": 12.0,
     "tide_ok_ft": [0.5, 5.0], "tide_ideal_ft": [1.5, 4.0],
-    "alert_score_min": 66,
+    "alert_score_min": 70,
 }
 
 

@@ -280,6 +280,56 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .tip strong { display: block; font-size: 0.95rem; margin-bottom: 2px; }
 .tip span { display: block; color: var(--ink-2); }
 
+/* ---- find a break ---- */
+.finder-sec { padding: 28px 0 0; }
+.finder { position: relative; max-width: 640px; }
+.finder[hidden] { display: none; }
+.finder-input {
+  width: 100%; min-height: 50px; padding: 0 16px 0 46px; border: 1px solid var(--axis); border-radius: 12px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 1.02rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 15px center;
+}
+.finder-input::placeholder { color: var(--muted); }
+.finder-input:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.finder-results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 15; margin: 0; padding: 6px; list-style: none;
+  background: var(--surface); border: 1px solid var(--axis); border-radius: 12px; max-height: 380px; overflow: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+.finder-results[hidden] { display: none; }
+.finder-results a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.finder-results li[aria-selected="true"] a, .finder-results a:hover, .finder-results a:focus-visible { background: var(--wash); }
+.f-text { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+.f-name { font-weight: 600; }
+.f-area { font-size: 0.85rem; }
+.finder-none { padding: 12px; color: var(--muted); font-size: 0.92rem; }
+.finder-alt { margin: 12px 0 0; font-size: 0.92rem; }
+.more { margin-top: 20px; }
+
+/* ---- directory ---- */
+.page-head { padding: 48px 0 8px; }
+.page-head .lede { max-width: 38em; }
+.page-head .finder { margin-top: 24px; }
+.dir { border-top: 0; padding-top: 24px; }
+.dir-groups { columns: 2; column-gap: 56px; }
+.dir-group { break-inside: avoid; margin: 0 0 32px; }
+.dir-group[hidden], .dir-item[hidden] { display: none; }
+.dir-h { font-size: 1.25rem; margin-bottom: 8px; }
+.dir-list { border-top: 1px solid var(--hair); }
+.dir-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; border-bottom: 1px solid var(--hair); }
+.dir-link { flex: 1; display: flex; flex-direction: column; padding: 12px 0; color: var(--ink); text-decoration: none; min-width: 0; }
+.dir-link:hover .dir-name { text-decoration: underline; }
+.dir-name { font-weight: 600; }
+.dir-size { font-size: 0.85rem; }
+.dir-empty { margin: 8px 0 24px; }
+@media (max-width: 760px) { .dir-groups { columns: 1; } }
+
+/* breaks without a photo yet get a quiet deep-water tile and hero rather than a gap */
+.row-photo-plain { display: grid; place-items: center; text-decoration: none; font-size: 1.9rem; color: rgba(255, 255, 255, 0.5);
+  background: linear-gradient(135deg, #0f2a40, #1f5a82); }
+.hero-bg-plain { background: radial-gradient(120% 90% at 18% 115%, #1f5f8c 0%, #11324d 52%, #0a1826 100%); }
+
 /* ---- footer ---- */
 .foot { border-top: 1px solid var(--hair); padding: 40px 0 56px; font-size: 0.88rem; color: var(--ink-2); }
 .foot-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 32px; }

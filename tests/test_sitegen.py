@@ -125,9 +125,12 @@ class Render(unittest.TestCase):
         payload, index, _ = self.pages()
         for anchor in ('id="now"', 'id="week"', 'id="alerts"', 'id="how"', 'id="boards"'):
             self.assertIn(anchor, index)
-        self.assertIn("Open in ntfy app", index)
-        self.assertIn(payload["spots"][0]["ntfy"]["topic"], index)
+        # the home page offers the digest; each break's own channel is on that break's page
+        self.assertIn("Open digest in ntfy", index)
         self.assertIn(payload["digest"]["topic"], index)
+        spot_page = render.spot_page(payload["spots"][0], payload)
+        self.assertIn("Open in ntfy app", spot_page)
+        self.assertIn(payload["spots"][0]["ntfy"]["topic"], spot_page)
 
     def test_every_rating_chip_has_icon_number_and_label(self):
         _payload, index, spot = self.pages()
@@ -163,15 +166,19 @@ class Photos(unittest.TestCase):
     IMG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "sitegen", "assets", "img")
 
-    def test_every_spot_has_a_photo_and_a_full_credit(self):
-        for cfg in config.SPOTS:
-            p = media.photo(cfg["slug"])
-            self.assertIsNotNone(p, cfg["slug"])
+    def test_every_photo_belongs_to_a_real_break_and_carries_a_full_credit(self):
+        slugs = {cfg["slug"] for cfg in config.SPOTS}
+        for slug, p in media.PHOTOS.items():
+            self.assertIn(slug, slugs, "photo for a break that doesn't exist")
             for key in ("file", "w", "h", "pos", "alt", "author", "licence", "source"):
-                self.assertTrue(p[key], "%s.%s" % (cfg["slug"], key))
+                self.assertTrue(p[key], "%s.%s" % (slug, key))
             self.assertTrue(p["source"].startswith("https://commons.wikimedia.org/"))
             self.assertTrue(p["licence"][1].startswith("https://creativecommons.org/"))
             self.assertIn(p["licence"][0], media.credit_text(p))
+
+    def test_the_original_five_still_have_photos(self):
+        for slug in ("swamis", "grandview", "beacons", "blacks", "oceanside"):
+            self.assertIsNotNone(media.photo(slug), slug)
 
     def test_photo_files_exist_and_stay_web_sized(self):
         for slug, p in media.PHOTOS.items():

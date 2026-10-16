@@ -20,6 +20,7 @@ import datetime
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -54,14 +55,40 @@ class Context:
         self._wind = {}
         self._sun = {}
 
+    def prefetch(self, spots, workers=8):
+        """Fetch everything the spots will ask for, concurrently, so the loop that follows only
+        reads caches. With a couple of dozen breaks this is the difference between a few seconds
+        and a minute. Each source is fetched once however many spots share it, and a failure is
+        left for the normal path to report, so this can never make a run worse."""
+        jobs = {}
+        for cfg in spots:
+            lat, lon = cfg["lat"], cfg["lon"]
+            jobs[("marine", self._grid(lat, lon))] = lambda lat=lat, lon=lon: self.marine(lat, lon)
+            jobs[("wind", self._grid(lat, lon))] = lambda lat=lat, lon=lon: self._load_wind(lat, lon)
+            jobs[("tide", cfg["tide_station"])] = lambda s=cfg["tide_station"]: self.tide(s)
+            for bid in cfg["buoys"]:
+                jobs[("buoy", bid)] = lambda bid=bid: self._reading(bid)
+
+        def run_one(job):
+            try:
+                job()
+            except Exception:  # noqa: BLE001 - the normal path will hit and report it
+                pass
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(run_one, jobs.values()))
+
+    def _reading(self, bid):
+        if bid not in self._buoys:
+            self._buoys[bid] = ndbc.fetch_spec(bid)
+        return self._buoys[bid]
+
     def buoy(self, ids):
         key = tuple(ids)
         if key not in self._buoys:
             fresh = fallback = None
             for bid in ids:
-                if bid not in self._buoys:
-                    self._buoys[bid] = ndbc.fetch_spec(bid)
-                d = self._buoys[bid]
+                d = self._reading(bid)
                 if d is None:
                     continue
                 if not d["stale"] and fresh is None:
@@ -530,6 +557,8 @@ def run(args):
             print("no spot matches %r" % spot_filter, file=sys.stderr)
             return 2
 
+    ctx.prefetch(spots)
+
     results = []
     site_inputs = []
     for cfg in spots:
@@ -587,17 +616,12 @@ def run(args):
         meta = state.setdefault("_meta", {})
 
         if args.digest:
-            notify.send(digest_title(results, now), format_digest(results, now, meta),
-                        public_topics=(config.public_topic("daily"),) if not args.spot else (),
-                        click=config.SITE_URL)
+            send_digests(results, now, meta, whole_county=not args.spot)
 
         for res in results:
             if should_alert(res, state, today.isoformat(), args.force):
                 alerts.append(res)
-        for res in alerts:
-            notify.send(alert_title(res), format_alert(res, now),
-                        public_topics=(res["cfg"]["ntfy_topic"],),
-                        click="%s/spots/%s/" % (config.SITE_URL, res["cfg"]["slug"]))
+        send_alerts(alerts, now)
 
         for res in results:
             entry = {"kind": alert_kind(res) or res["verdict"], "date": today.isoformat()}
@@ -613,6 +637,29 @@ def run(args):
     if not args.quiet or alerts:
         print(report)
     return 0
+
+
+def send_digests(results, now, meta, whole_county=True):
+    """Two different digests. The owner's goes to the private phone topic and covers only their
+    own breaks. The public one is the county's best few, to the public topic only and without
+    the owner's heartbeat line. Narrowing a run to one spot (`whole_county=False`) skips it."""
+    mine = [r for r in results if r["cfg"]["mine"]]
+    if mine:
+        notify.send(digest_title(mine, now), format_digest(mine, now, meta), click=config.SITE_URL)
+    if whole_county:
+        top = _best_first(results)[:config.HOME_COUNT]
+        notify.send(digest_title(top, now), format_digest(top, now, None),
+                    public_topics=(config.public_topic("daily"),), click=config.SITE_URL,
+                    private=False)
+
+
+def send_alerts(alerts, now):
+    """Only the owner's own breaks reach their phone; every break reaches its own public topic."""
+    for res in alerts:
+        notify.send(alert_title(res), format_alert(res, now),
+                    public_topics=(res["cfg"]["ntfy_topic"],),
+                    click="%s/spots/%s/" % (config.SITE_URL, res["cfg"]["slug"]),
+                    private=bool(res["cfg"]["mine"]))
 
 
 def _log_forecasts(now, log_dir):

@@ -18,12 +18,12 @@ def _publish_public():
     return os.environ.get("SURF_PUBLISH_PUBLIC", "").strip().lower() in ("1", "true", "yes")
 
 
-def _ntfy(title, body, public_topics=(), click=None):
+def _ntfy(title, body, public_topics=(), click=None, private=True):
     server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
     topics = []
-    private = os.environ.get("NTFY_TOPIC", "").strip()
-    if private:
-        topics.append(private)
+    private_topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if private and private_topic:
+        topics.append(private_topic)
     if public_topics and _publish_public():
         topics.extend(t for t in public_topics if t)
     headers = {"Title": _ascii(title), "Tags": "ocean", "Priority": "high"}
@@ -60,8 +60,11 @@ def _macos(title, body):
         pass
 
 
-def send(title, body, public_topics=(), click=None):
-    print("\n>>> NOTIFY: %s\n%s\n" % (title, body))
-    _ntfy(title, body, public_topics=public_topics, click=click)
-    _webhook(title, body)
-    _macos(title, body)
+def send(title, body, public_topics=(), click=None, private=True):
+    """`private=False` is for something that concerns only the public topics (a break that
+    isn't one of the owner's own): it never reaches the owner's phone, Slack or Mac."""
+    print("\n>>> NOTIFY%s: %s\n%s\n" % ("" if private else " (public only)", title, body))
+    _ntfy(title, body, public_topics=public_topics, click=click, private=private)
+    if private:
+        _webhook(title, body)
+        _macos(title, body)

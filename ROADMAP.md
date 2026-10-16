@@ -43,7 +43,8 @@ formatters + state I/O).
   board recommender, and opt-in alerts via public per-spot ntfy topics.
 - [x] **The whole county.** 27 breaks from Oceanside to the border, a searchable directory, and a
   home page that shows the county's best five. Only the original five reach the owner's phone.
-  - [ ] Photos for the new breaks (only the original five have one; the rest show a plain tile).
+  - [x] Photos for the new breaks (20 free-licensed Commons photos). Bird Rock and Buccaneer Beach
+    still show a plain tile: nothing usable turned up. Mission Beach's is the Giant Dipper, not surf.
   - [ ] Have someone who surfs these breaks sanity-check each one's size, tide and swell window.
   - [ ] Profiles (below) are the natural next step: let people choose their own breaks and ideals.
 - [ ] **Website v2.** Per-user thresholds and email/web-push opt-in need a small

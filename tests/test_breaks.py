@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 import sitegen
-from sitegen import render
+from sitegen import media, render
 from sitegen.build import PEAKS_PER_DAY
 from tests.test_sitegen import at, make_inputs
 
@@ -149,23 +149,52 @@ class Directory(unittest.TestCase):
             self.assertNotIn(evil, page)
 
 
-class WithoutAPhoto(unittest.TestCase):
+class Photos(unittest.TestCase):
+    """Bird Rock and Buccaneer had no free-licensed photo to be found; anything without one must
+    still look finished. A slug that can never have a photo keeps these tests true if that changes."""
+    NONE = "a-break-that-has-no-photo"
+
     def test_the_row_gets_a_quiet_tile_instead_of_a_gap(self):
-        tile = render._thumb("oceanside-pier", "")
+        tile = render._thumb(self.NONE, "")
         self.assertIn("row-photo row-photo-plain", tile)
         self.assertNotIn("<img", tile)
-        self.assertIn('href="spots/oceanside-pier/"', tile)
+        self.assertIn('href="spots/%s/"' % self.NONE, tile)
 
-    def test_a_photo_break_still_gets_its_photo(self):
-        self.assertIn("<img", render._thumb("swamis", ""))
+    def test_a_photo_break_gets_its_small_tile_not_the_full_photo(self):
+        tile = render._thumb("windansea", "")
+        self.assertIn('src="assets/img/windansea-sm.jpg"', tile)
+        self.assertNotIn('windansea.jpg"', tile)
+        self.assertIn('loading="lazy"', tile)
+
+    def test_every_new_break_with_a_photo_uses_it_on_its_page_with_alt_text_and_a_credit(self):
+        p = payload_for_all()
+        for spot in p["spots"]:
+            photo = media.photo(spot["slug"])
+            if not photo:
+                continue
+            page = render.spot_page(spot, p)
+            hero = page.split("</section>")[0]
+            self.assertIn('src="../../assets/img/%s"' % photo["file"], hero, spot["slug"])
+            self.assertIn('alt="%s"' % render.esc(photo["alt"]), hero, spot["slug"])
+            self.assertIn(photo["author"], hero, spot["slug"])
+            self.assertIn(render.esc(photo["source"]), hero, spot["slug"])
 
     def test_the_spot_page_hero_falls_back_to_a_gradient_and_keeps_the_dark_styling(self):
         p = payload_for_all()
-        spot = next(s for s in p["spots"] if s["slug"] == "oceanside-pier")
+        spot = dict(next(s for s in p["spots"] if s["slug"] == "swamis"), slug=self.NONE)
         page = render.spot_page(spot, p)
         self.assertIn("hero-bg hero-bg-plain", page)
         self.assertIn('class="spot-hero has-photo"', page)
         self.assertNotIn('class="photo-credit"', page.split("</section>")[0])
+
+    def test_the_footer_credits_every_photo_on_the_page(self):
+        p = payload_for_all()
+        footer = render.index_page(p).split('class="foot-credits"')[1]
+        for spot in p["spots"]:
+            photo = media.photo(spot["slug"])
+            if photo:
+                self.assertIn(render.esc(photo["source"]), footer, spot["slug"])
+                self.assertIn(photo["licence"][0], footer, spot["slug"])
 
 
 class Build(unittest.TestCase):

@@ -177,4 +177,123 @@
     window.SwellHero = { update: update };    // lets a test set the clock
     update(Date.now());
   }
+
+  /* ---- find a break ----
+     Home page: a dropdown of matches (#breaks-data) with arrow keys, Enter and Escape.
+     Directory page: the same box filters the listed breaks in place. The box ships hidden and
+     only appears once this runs, since it can't work without it; both pages link to the full
+     directory for anyone without script. Text only, never innerHTML. */
+  var finder = document.querySelector('[data-finder]');
+  if (finder && window.SwellSearch) {
+    var box = finder.querySelector('input');
+    var results = finder.querySelector('.finder-results');
+    var status = finder.querySelector('[data-finder-status]');
+    var directory = document.querySelector('[data-directory]');
+    var CHIP = { green: 'chip-good', yellow: 'chip-ok', red: 'chip-poor' };
+    var MARK = { green: '✓', yellow: '!', red: '✕' };
+    var shown = [];
+    var active = -1;
+    finder.hidden = false;
+    finder.addEventListener('submit', function (e) { e.preventDefault(); });
+
+    var el = function (tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    };
+    var say = function (text) { if (status) status.textContent = text; };
+
+    if (directory) {
+      /* directory: hide what doesn't match, and any area left with nothing */
+      var rows = Array.prototype.slice.call(directory.querySelectorAll('[data-break]'));
+      var groups = Array.prototype.slice.call(directory.querySelectorAll('[data-group]'));
+      var empty = directory.querySelector('[data-empty]');
+      var filter = function () {
+        var q = box.value;
+        var visible = 0;
+        rows.forEach(function (li) {
+          var ok = window.SwellSearch.matches({
+            name: li.getAttribute('data-name'), area: li.getAttribute('data-area'),
+            aliases: [li.getAttribute('data-aliases') || '']
+          }, q);
+          li.hidden = !ok;
+          if (ok) visible++;
+        });
+        groups.forEach(function (g) { g.hidden = !g.querySelector('[data-break]:not([hidden])'); });
+        if (empty) empty.hidden = visible > 0;
+        say(visible + (visible === 1 ? ' break' : ' breaks') + ' shown');
+      };
+      box.addEventListener('input', filter);
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          var first = directory.querySelector('[data-break]:not([hidden]) a');
+          if (first) { e.preventDefault(); window.location.href = first.getAttribute('href'); }
+        } else if (e.key === 'Escape') { box.value = ''; filter(); }
+      });
+    } else {
+      /* home: a dropdown of the best few matches */
+      var data = [];
+      var raw = document.getElementById('breaks-data');
+      try { data = JSON.parse(raw ? raw.textContent : '[]') || []; } catch (e) { data = []; }
+
+      var close = function () {
+        results.hidden = true;
+        box.setAttribute('aria-expanded', 'false');
+        box.removeAttribute('aria-activedescendant');
+        active = -1;
+      };
+      var mark = function (i) {
+        active = i;
+        Array.prototype.forEach.call(results.children, function (li, n) {
+          li.setAttribute('aria-selected', n === i ? 'true' : 'false');
+        });
+        if (i >= 0) box.setAttribute('aria-activedescendant', results.children[i].id);
+        else box.removeAttribute('aria-activedescendant');
+      };
+      var render = function () {
+        var q = box.value;
+        results.textContent = '';
+        shown = window.SwellSearch.search(data, q, 8);
+        if (!window.SwellSearch.normalize(q)) { close(); say(''); return; }
+        if (!shown.length) {
+          results.appendChild(el('li', 'finder-none', 'No break matches that. Try a beach, a neighbourhood or a nickname.'));
+        }
+        shown.forEach(function (b, i) {
+          var li = el('li', null, null);
+          li.id = 'finder-opt-' + i;
+          li.setAttribute('role', 'option');
+          var a = el('a', null, null);
+          a.setAttribute('href', 'spots/' + encodeURIComponent(b.slug) + '/');
+          var text = el('span', 'f-text', null);
+          text.appendChild(el('span', 'f-name', b.name));
+          text.appendChild(el('span', 'f-area muted', b.area + (b.size ? ' · ' + b.size : '')));
+          a.appendChild(text);
+          var chip = el('span', 'chip chip-sm ' + CHIP[b.band]);
+          chip.appendChild(el('span', 'chip-ico', MARK[b.band]));
+          chip.querySelector('.chip-ico').setAttribute('aria-hidden', 'true');
+          chip.appendChild(el('span', 'chip-num', b.rating.toFixed(1)));
+          chip.appendChild(el('span', 'chip-lbl', b.label));
+          a.appendChild(chip);
+          li.appendChild(a);
+          results.appendChild(li);
+        });
+        results.hidden = false;
+        box.setAttribute('aria-expanded', 'true');
+        mark(-1);
+        say(shown.length + (shown.length === 1 ? ' break' : ' breaks') + ' found');
+      };
+      box.addEventListener('input', render);
+      box.addEventListener('focus', function () { if (box.value) render(); });
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown' && shown.length) { e.preventDefault(); mark((active + 1) % shown.length); }
+        else if (e.key === 'ArrowUp' && shown.length) { e.preventDefault(); mark(active <= 0 ? shown.length - 1 : active - 1); }
+        else if (e.key === 'Enter' && shown.length) {
+          e.preventDefault();
+          window.location.href = 'spots/' + encodeURIComponent(shown[active >= 0 ? active : 0].slug) + '/';
+        } else if (e.key === 'Escape') { box.value = ''; render(); }
+      });
+      document.addEventListener('click', function (e) { if (!finder.contains(e.target)) close(); });
+    }
+  }
 })();

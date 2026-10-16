@@ -20,7 +20,8 @@ _NTFY_HOST = "ntfy.sh"
 _ORDER = {"GO": 0, "LATER": 1, "MARGINAL": 2, "FLAT": 3}
 
 SOURCES = {
-    "waves": "NOAA National Data Buoy Center — buoys 46224 (Oceanside Offshore) and 46225 (Torrey Pines Outer)",
+    "waves": "NOAA National Data Buoy Center — buoys 46224 (Oceanside Offshore), 46225 (Torrey Pines Outer), "
+             "46258 (Mission Bay West) and 46232 (Point Loma South)",
     "tides": "NOAA CO-OPS tide predictions — station 9410230 (La Jolla)",
     "forecast": "Open-Meteo Marine and Weather APIs (CC BY 4.0)",
 }
@@ -156,6 +157,9 @@ def _spot(item, now):
         "slug": cfg["slug"],
         "name": cfg["name"],
         "area": cfg.get("area", ""),
+        "aliases": list(cfg.get("aliases", [])),
+        "lat": cfg["lat"],
+        "lon": cfg["lon"],
         "notes": cfg.get("notes", ""),
         "verdict": res["verdict"],
         **_band(res["rating_score"]),
@@ -185,6 +189,18 @@ def _spot(item, now):
     }
 
 
+def _directory_entry(s):
+    """What the search box and the directory need to know about one break, nothing more."""
+    c = s["now"]
+    size = None
+    if c["height_ft"] is not None:
+        size = ("%.1f" % c["height_ft"]).rstrip("0").rstrip(".") + " ft"
+        if c["period_s"] is not None:
+            size += " at %d s" % c["period_s"]
+    return {"slug": s["slug"], "name": s["name"], "area": s["area"], "aliases": s["aliases"],
+            "rating": s["rating"], "band": s["band"], "label": s["label"], "size": size}
+
+
 def _is_daylight(items, now):
     """True while the sun is up (or when we can't tell) — 'right now' headlines only
     make sense in daylight."""
@@ -197,6 +213,7 @@ def _is_daylight(items, now):
 
 PEAK_STRONG = 66.0      # same bar as a GO
 PEAK_RIDEABLE = 50.0
+PEAKS_PER_DAY = 5
 
 
 def _peaks(items):
@@ -222,7 +239,15 @@ def _peaks(items):
                 "sub": "%s, %s. About %s–%s ft." % (_cap(words.size_words(h)), words.power_words(p),
                                                     _r(lo), _r(hi)),
             }))
-    return [p for _t, p in sorted(found, key=lambda x: x[0])]
+    # Keep each day's best few. The headline only ever needs the best peak still ahead on the
+    # earliest good day, and carrying every break's every day would bloat the page for nothing.
+    by_day = {}
+    for t, p in found:
+        by_day.setdefault(p["date"], []).append((t, p))
+    kept = []
+    for day in by_day.values():
+        kept += sorted(day, key=lambda x: (-x[1]["score"], x[0]))[:PEAKS_PER_DAY]
+    return [p for _t, p in sorted(kept, key=lambda x: x[0])]
 
 
 def pick_next_peak(peaks, now):
@@ -309,6 +334,8 @@ def make_payload(inputs, now):
     spots = [_spot(i, now) for i in inputs]
     ranking = sorted(spots, key=lambda s: (_ORDER[s["verdict"]], -s["rating"]))
     peaks = _peaks(inputs)
+    # North to south, which is also how the directory reads.
+    by_coast = sorted(spots, key=lambda s: -s["lat"])
     return {
         "generated": now.isoformat(),
         "generated_label": "%s, %s %s" % (now.strftime("%a %b ") + str(now.day), clock(now), now.strftime("%Z")),
@@ -317,6 +344,8 @@ def make_payload(inputs, now):
         "headline": _headline(inputs, now, peaks),
         "peaks": peaks,
         "ranking": [s["slug"] for s in ranking],
+        "top": [s["slug"] for s in ranking[:config.HOME_COUNT]],
+        "breaks": [_directory_entry(s) for s in by_coast],
         "spots": spots,
         "digest": _ntfy(config.public_topic("daily")),
         "sources": SOURCES,
@@ -335,6 +364,7 @@ def build(inputs, now, outdir):
     _write(os.path.join(outdir, "index.html"), render.index_page(payload))
     for spot in payload["spots"]:
         _write(os.path.join(outdir, "spots", spot["slug"], "index.html"), render.spot_page(spot, payload))
+    _write(os.path.join(outdir, "breaks", "index.html"), render.breaks_page(payload))
     _write(os.path.join(outdir, "404.html"), render.not_found_page(payload))
     _write(os.path.join(outdir, ".nojekyll"), "")
     shutil.copytree(_ASSETS, os.path.join(outdir, "assets"), dirs_exist_ok=True)

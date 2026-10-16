@@ -41,6 +41,11 @@ formatters + state I/O).
 - [x] **Public website.** Static site on GitHub Pages, rebuilt by the same workflow
   that checks conditions: ranked live conditions, hour-by-hour chart, 7-day matrix,
   board recommender, and opt-in alerts via public per-spot ntfy topics.
+- [x] **The whole county.** 27 breaks from Oceanside to the border, a searchable directory, and a
+  home page that shows the county's best five. Only the original five reach the owner's phone.
+  - [ ] Photos for the new breaks (only the original five have one; the rest show a plain tile).
+  - [ ] Have someone who surfs these breaks sanity-check each one's size, tide and swell window.
+  - [ ] Profiles (below) are the natural next step: let people choose their own breaks and ideals.
 - [ ] **Website v2.** Per-user thresholds and email/web-push opt-in need a small
   backend (stored subscriptions, unsubscribe links, abuse handling) — deliberately
   out of scope for v1, which keeps the project stateless and data-free.

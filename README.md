@@ -1,7 +1,7 @@
 # Swell Conditions App
 
-A surf-alert system for North County San Diego. It pulls live data from NOAA
-buoys, tide predictions, and a wind/wave forecast, scores five breaks against
+A surf-alert system for San Diego County. It pulls live data from NOAA
+buoys, tide predictions, and a wind/wave forecast, scores 27 breaks against
 per-spot criteria, and sends a plain-language phone notification — with the best
 time window — only when a spot is actually worth paddling out. It runs unattended
 in GitHub Actions on a schedule.
@@ -20,11 +20,13 @@ in GitHub Actions on a schedule.
   the *next* scheduled check and warns you early.
 - **De-duplicated alerts** with state kept in the GitHub Actions cache, plus a
   daily digest and a heartbeat footer.
-- **241 unit tests** covering the scoring, tide interpolation, scheduling clock, and
+- **306 unit tests** covering the scoring, tide interpolation, scheduling clock, and
   feed parsing, run in CI on every push. See [`ROADMAP.md`](ROADMAP.md) for the
   review and what's planned next.
 
-Spots: **Swami's, Grandview, Beacon's, Blacks, Oceanside Harbor**
+Breaks: **27, from Oceanside to the Mexican border** (the list is `SPOTS` in [`config.py`](config.py)).
+Five of them are flagged `mine` (Swami's, Grandview, Beacon's, Blacks, Oceanside Harbor): only those reach
+the owner's private phone topic and private digest. Every break gets its own public opt-in topic.
 
 ## Data sources (all free, no API key)
 
@@ -147,12 +149,15 @@ and NDBC feed parsing. Runs on every push via `.github/workflows/tests.yml`.
 
 A static site, rebuilt on every scheduled run and deployed to GitHub Pages:
 
-- **Right now** — five breaks ranked by rating, each with a "what to bring" pick
+- **Right now** — the county's five best breaks this minute, ranked by rating, each with a "what to bring" pick
+- **Find a break** — a search box that knows nicknames ("PB", "15th street", "the cliffs") and an
+  "All breaks" directory, north to south, filterable as you type. The search is plain script over the
+  page's own data, so there's no server
 - **A headline that keeps up** — the top of the page names the next peak worth catching and
   moves on to the following one the moment the clock passes it, without waiting for a rebuild
   (the page carries every upcoming peak and picks from the visitor's own clock; the pick is
   written in both Python and JavaScript and a test keeps the two identical)
-- **Week ahead** — a 7-day matrix of the best daylight hour per spot, with size ranges
+- **Week ahead** — a 7-day matrix of the best daylight hour for those five, with size ranges
 - **Spot pages** — an hour-by-hour chart (with a table view), the next 7 days, what
   the break likes, and a subscribe button
 - **Opt-in alerts** — every spot has its own public [ntfy](https://ntfy.sh) topic and
@@ -179,6 +184,21 @@ python3 -m http.server 8000 --directory _site     # then open http://localhost:8
 (longboard / fish / shortboard / performance board) based on size, period and wind;
 every pick carries a one-line reason. **Enabling Pages:** repo Settings → Pages →
 Source: *GitHub Actions* (the repo must be public on a free plan).
+
+## Adding or tuning a break
+
+Everything about a break lives in one entry in `SPOTS` in [`config.py`](config.py): name, area,
+coordinates, which offshore buoys to read, and optional overrides (size range, swell window, tide
+range, nicknames for search). Anything not overridden takes the defaults. Add an entry, run the
+tests (`tests/test_roster.py` checks coordinates, buoys, ranges and nicknames), and the break
+gets a page, a directory listing, a search entry and its own alert topic on the next build.
+
+The size, tide and swell-window settings for the newer breaks are starting points based on how
+each stretch of coast generally behaves. Someone who surfs a break will know better, and fixing
+one is a one-line change. Coordinates come from OpenStreetMap beaches; the forecast models are
+8–25 km grids, so a few hundred metres never changes the answer. Only the four *offshore* buoys
+are used: the nearshore ones read lower and from a different angle because the swell has already
+bent on its way in, and the scoring thresholds assume an offshore reading.
 
 ## Forecast accuracy
 

@@ -28,6 +28,8 @@ _THEME_BOOT = ("<script>(function(){try{var t=localStorage.getItem('theme');"
 _FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E"
             "%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%8A%3C/text%3E%3C/svg%3E")
 
+_NUMBER_WORDS = {3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
 _IOS = "https://apps.apple.com/us/app/ntfy/id1625396347"
 _ANDROID = "https://play.google.com/store/apps/details?id=io.heckel.ntfy"
 
@@ -110,7 +112,8 @@ def _hero_bg(slug, prefix, decorative=True):
     """Full-bleed photo behind a hero, plus its visible credit. Empty if there's no photo."""
     p = media.photo(slug)
     if not p:
-        return "", ""
+        # No photo for this break yet: a deep-water gradient keeps the hero looking like the rest.
+        return '<div class="hero-bg hero-bg-plain" aria-hidden="true"></div>', ""
     img = ('<div class="hero-bg"%s><img src="%sassets/img/%s" alt="%s" width="%d" height="%d" '
            'style="object-position:%s" decoding="async" fetchpriority="high"></div>'
            % (' aria-hidden="true"' if decorative else "", prefix, esc(p["file"]),
@@ -121,7 +124,8 @@ def _hero_bg(slug, prefix, decorative=True):
 def _thumb(slug, prefix):
     p = media.photo(slug)
     if not p:
-        return ""
+        return ('<a class="row-photo row-photo-plain" href="%sspots/%s/" tabindex="-1" aria-hidden="true">'
+                '<span>≈</span></a>' % (prefix, esc(slug)))
     return ('<a class="row-photo" href="%sspots/%s/" tabindex="-1" aria-hidden="true">'
             '<img src="%sassets/img/%s" alt="" width="%d" height="%d" loading="lazy" decoding="async" '
             'style="object-position:%s"></a>'
@@ -147,7 +151,7 @@ def _header(prefix):
         '<header class="top"><div class="wrap top-in">'
         '<a class="brand" href="%(p)s"><span class="brand-mark" aria-hidden="true">≈</span>Swell Check</a>'
         '<nav class="nav" aria-label="Primary">'
-        '<a href="%(p)s#now">Now</a><a href="%(p)s#week">Week</a>'
+        '<a href="%(p)s#now">Now</a><a href="%(p)sbreaks/">All breaks</a><a href="%(p)s#week">Week</a>'
         '<a href="%(p)s#alerts">Alerts</a><a href="%(p)s#how">How it works</a></nav>'
         '<button class="theme" type="button" aria-label="Switch colour theme" data-theme-toggle>'
         '<span aria-hidden="true">◐</span></button>'
@@ -228,6 +232,28 @@ def subscribe_buttons(name, ntfy, label=None):
     )
 
 
+def _place(spot):
+    """The line under a break's name. Where the area is the same word as the name (Pacific Beach
+    in Pacific Beach) it says nothing, so name the county instead."""
+    area = spot["area"]
+    return "San Diego County" if area.strip().lower() == spot["name"].strip().lower() else area
+
+
+def _finder_form():
+    """The break search box. Hidden until the script runs, since it can't work without it; the
+    pages that carry it also link to the full directory, which does."""
+    return (
+        '<form class="finder" role="search" data-finder hidden>'
+        '<label class="sr" for="finder-q">Find a break</label>'
+        '<input id="finder-q" class="finder-input" type="search" name="q" autocomplete="off" '
+        'spellcheck="false" placeholder="Find a break: try Windansea, PB or Swami\'s" '
+        'role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="finder-results">'
+        '<ul id="finder-results" class="finder-results" role="listbox" hidden></ul>'
+        '<p class="sr" role="status" data-finder-status></p>'
+        '</form>'
+    )
+
+
 def _spot_row(spot):
     c = spot["now"]
     board = spot.get("board")
@@ -242,7 +268,7 @@ def _spot_row(spot):
         '<div class="row-rate">%(chip)s</div>'
         '<div class="row-body"><p class="cond">%(cond)s</p><p class="words">%(words)s</p>%(board)s</div>'
         '<div class="row-when"><p>%(when)s</p></div></article>'
-        % {"slug": esc(spot["slug"]), "name": esc(spot["name"]), "area": esc(spot["area"]),
+        % {"slug": esc(spot["slug"]), "name": esc(spot["name"]), "area": esc(_place(spot)),
            "thumb": _thumb(spot["slug"], ""),
            "chip": chip(spot["rating"], spot["band"], spot["label"], "chip-lg"),
            "cond": esc(cond_line(c)), "words": esc(words_line[:1].upper() + words_line[1:]),
@@ -250,8 +276,8 @@ def _spot_row(spot):
     )
 
 
-def _matrix(payload):
-    spots = payload["spots"]
+def _matrix(payload, spots=None):
+    spots = payload["spots"] if spots is None else spots
     dates = sorted({d["date"] for s in spots for d in s["outlook"]})
     if not dates:
         return '<p class="muted">The forecast outlook isn\'t available right now.</p>'
@@ -371,16 +397,28 @@ def index_page(payload):
            esc(h["sub"]), esc(payload["generated"]), esc(payload["generated_label"]), figure, credit,
            _json_for_script(payload.get("peaks", [])))
     )
-    ranked = "".join(_spot_row(spots[slug]) for slug in payload["ranking"])
+    top = [spots[slug] for slug in payload["top"]]
+    total = len(payload["spots"])
+    count = _NUMBER_WORDS.get(len(top), str(len(top)))
+    finder = (
+        '<section class="finder-sec"><div class="wrap">%s'
+        '<p class="finder-alt"><a href="breaks/">Browse all %d breaks, Oceanside to the border →</a></p>'
+        '</div></section>'
+        '<script type="application/json" id="breaks-data">%s</script>'
+        % (_finder_form(), total, _json_for_script(payload.get("breaks", [])))
+    )
     now_sec = (
         '<section id="now" class="sec"><div class="wrap"><h2>Right now</h2>'
-        '<p class="sec-lede">Five North County San Diego breaks, ranked by how good they are this minute.</p>'
-        '<div class="rows">%s</div></div></section>' % ranked
+        '<p class="sec-lede">The %s best breaks in San Diego County this minute, out of the %d we track.</p>'
+        '<div class="rows">%s</div>'
+        '<p class="more"><a class="btn" href="breaks/">See all %d breaks</a></p></div></section>'
+        % (count, total, "".join(_spot_row(s) for s in top), total)
     )
     week = (
         '<section id="week" class="sec"><div class="wrap"><h2>The week ahead</h2>'
-        '<p class="sec-lede">The best daylight hour for each spot, each day. Tap a cell for the details.</p>'
-        '%s%s</div></section>' % (_matrix(payload), _legend())
+        '<p class="sec-lede">The best daylight hour each day for the %s breaks above. Tap a cell for the details, '
+        'or <a href="breaks/">look up any other break</a>.</p>'
+        '%s%s</div></section>' % (count, _matrix(payload, top), _legend())
     )
     boards = (
         '<section id="boards" class="sec"><div class="wrap"><h2>Which board to bring</h2>'
@@ -388,22 +426,19 @@ def index_page(payload):
         'the period and the wind — and it shows its reasoning.</p><dl class="boards">%s</dl></div></section>'
         % "".join('<div><dt>%s</dt><dd>%s</dd></div>' % (esc(n), esc(b)) for n, b in _BOARD_BLURBS)
     )
-    sub_rows = "".join(
-        '<li><div><strong>%s</strong><span class="muted"> %s</span></div>%s</li>'
-        % (esc(s["name"]), esc(s["area"]), subscribe_buttons(s["name"], s["ntfy"]))
-        for s in payload["spots"])
     alerts = (
         '<section id="alerts" class="sec"><div class="wrap"><h2>Get the alerts</h2>'
-        '<p class="sec-lede">A notification only when a spot is genuinely worth paddling out for — '
+        '<p class="sec-lede">A notification only when a break is genuinely worth paddling out for — '
         'plus a heads-up when a good window is about to open. No account, no email.</p>'
         '<ol class="steps"><li><strong>Get ntfy.</strong> A free, open-source notification app: '
         '<a href="%s" rel="noopener">iPhone</a> · <a href="%s" rel="noopener">Android</a> · or use it in the browser.</li>'
-        '<li><strong>Pick your breaks.</strong> Tap a button below. It opens the app on that spot\'s channel.</li>'
+        '<li><strong>Pick your breaks.</strong> Every one of the %d breaks has its own channel: '
+        '<a href="breaks/">find yours</a> and tap Subscribe on its page. Or take the daily digest below.</li>'
         '<li><strong>That\'s it.</strong> Unsubscribe any time from inside the app.</li></ol>'
-        '<ul class="sub-list">%s<li><div><strong>Daily digest</strong><span class="muted"> all five spots, every morning</span></div>%s</li></ul>'
+        '<ul class="sub-list"><li><div><strong>Daily digest</strong><span class="muted"> the county\'s best %s breaks, every morning</span></div>%s</li></ul>'
         '<p class="note">Privacy: this site never sees who subscribes. The trade-off is that ntfy channels are public — '
         'anyone who knows a channel name can read it or post to it — so treat them as a broadcast, not a private line.</p>'
-        '</div></section>' % (_IOS, _ANDROID, sub_rows, subscribe_buttons("the daily digest", payload["digest"], "Open digest in ntfy"))
+        '</div></section>' % (_IOS, _ANDROID, total, count, subscribe_buttons("the daily digest", payload["digest"], "Open digest in ntfy"))
     )
     how = (
         '<section id="how" class="sec"><div class="wrap"><h2>How it works</h2><ol class="how">'
@@ -418,10 +453,47 @@ def index_page(payload):
         '</ol><p class="note">Built in dependency-free Python, rebuilt several times a day by GitHub Actions, with a test suite that runs on every change. '
         '<a href="%s">Read the code and the roadmap.</a></p></div></section>' % esc(payload["repo_url"])
     )
-    return _shell("Swell Check — surf conditions for North County San Diego",
-                  "Live surf conditions, a 7-day outlook and opt-in alerts for Swami's, Grandview, Beacon's, Blacks and Oceanside Harbor.",
-                  hero + now_sec + week + boards + alerts + how, "", payload, "home", media.HERO_SLUG,
-                  scripts=("peaks.js",))
+    return _shell("Swell Check — surf conditions for San Diego County",
+                  "Live surf conditions, a 7-day outlook and opt-in alerts for %d breaks from Oceanside to the border." % total,
+                  hero + finder + now_sec + week + boards + alerts + how, "", payload, "home", media.HERO_SLUG,
+                  scripts=("peaks.js", "search.js"))
+
+
+def breaks_page(payload):
+    """Every break, north to south, grouped by area, with live ratings and a filter box."""
+    by_slug = {s["slug"]: s for s in payload["spots"]}
+    groups = {}
+    for b in payload["breaks"]:
+        groups.setdefault(b["area"], []).append(b)
+    sections = []
+    for area, items in groups.items():
+        lis = []
+        for b in items:
+            s = by_slug[b["slug"]]
+            lis.append(
+                '<li class="dir-item" data-break data-name="%s" data-area="%s" data-aliases="%s">'
+                '<a class="dir-link" href="../spots/%s/"><span class="dir-name">%s</span>'
+                '<span class="dir-size muted">%s</span></a>%s</li>'
+                % (esc(b["name"]), esc(b["area"]), esc(" ".join(b["aliases"])), esc(b["slug"]), esc(b["name"]),
+                   esc(b["size"] or "no reading"), chip(b["rating"], b["band"], b["label"], "chip-sm")))
+        sections.append('<section class="dir-group" data-group><h2 class="dir-h">%s</h2>'
+                        '<ul class="dir-list plain">%s</ul></section>' % (esc(area), "".join(lis)))
+    total = len(payload["breaks"])
+    head = (
+        '<section class="page-head"><div class="wrap"><p class="crumb"><a href="../">← San Diego County</a></p>'
+        '<h1>All %d breaks</h1><p class="lede">Oceanside to the border, north to south, with live ratings. '
+        'Tap one for its hour-by-hour chart and the week ahead.</p>%s</div></section>' % (total, _finder_form())
+    )
+    body = (
+        head + '<section class="sec dir" data-directory><div class="wrap"><div class="dir-groups">%s</div>'
+        '<p class="dir-empty muted" data-empty hidden>No break matches that. Try a beach, a neighbourhood or a nickname like "PB".</p>'
+        '<p class="note">Each break\'s size range, tide and swell window are starting points based on how that stretch of coast '
+        'generally behaves, not gospel. They live in <a href="%s/blob/main/config.py">config.py</a> and are easy to tune.</p>'
+        '</div></section>' % ("".join(sections), esc(payload["repo_url"]))
+    )
+    return _shell("All breaks — Swell Check",
+                  "Live surf ratings for all %d breaks in San Diego County, Oceanside to the border." % total,
+                  body, "../", payload, "breaks", scripts=("search.js",))
 
 
 def spot_page(spot, payload):
@@ -449,11 +521,11 @@ def spot_page(spot, payload):
                 if buoy else "No buoy reading right now — showing the forecast model.")
     bg, credit = _hero_bg(spot["slug"], "../../", decorative=False)
     hero = (
-        '<section class="spot-hero%s">%s<div class="wrap"><p class="crumb"><a href="../../">← All spots</a></p>'
+        '<section class="spot-hero%s">%s<div class="wrap"><p class="crumb"><a href="../../">← San Diego County</a> · <a href="../../breaks/">All breaks</a></p>'
         '<div class="spot-hero-in"><div><p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s</p></div>'
         '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div>%s</section>'
-        % (" has-photo" if bg else "", bg, esc(spot["area"]), esc(spot["name"]), esc(spot["notes"]),
+        % (" has-photo" if bg else "", bg, esc(_place(spot)), esc(spot["name"]), esc(spot["notes"]),
            esc(payload["generated"]), esc(payload["generated_label"]),
            esc(buoy_txt), spot["rating"], chip(spot["rating"], spot["band"], spot["label"], "chip-pill"), credit)
     )

@@ -31,6 +31,8 @@ OUTLOOK_DAYS = 7
 # password-protected, so anyone who knows the name can read *and post* — the random
 # suffix just keeps names from colliding with other people's topics.
 SITE_URL = "https://colinwehmann-wq.github.io/swell-conditions-app"
+# Where the profile service (worker/) lives. The address is public; reading every profile needs a key.
+PROFILES_API = "https://swell-profiles.swellcheck.workers.dev"
 PUBLIC_TOPIC_BASE = "swellcheck-nc"
 PUBLIC_TOPIC_SUFFIX = "ed10f8"
 

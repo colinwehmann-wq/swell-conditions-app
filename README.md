@@ -111,6 +111,18 @@ The **peak window** is the longest run of daylight hours that stay above the
 alert score; "best" is the top-scoring hour in it. If nothing qualifies today,
 it looks at tomorrow.
 
+## Personal alerts (profiles)
+
+Anyone can choose their own breaks and what they call ideal on the site's **My alerts** page (wave height,
+swell period, wind, swell direction, tide, how early to be told, quiet hours) and get a notification about an
+hour before those conditions peak. No account: the page stores a long random id in the browser, shown as a
+private link, and each person gets a private ntfy channel.
+
+- [`worker/`](worker/README.md): the profile service, a small Cloudflare Worker with KV storage, free at this scale.
+- [`sources/profiles.py`](sources/profiles.py): which hours match a profile, when to tell them, what to say (pure, tested).
+- [`tools/profile_alerts.py`](tools/profile_alerts.py) and [`profile-alerts.yml`](.github/workflows/profile-alerts.yml):
+  the hourly job that reads every profile, checks the forecast and sends the alerts. Needs the `PROFILES_ADMIN_KEY` secret.
+
 ## Tuning
 
 Everything is in [`config.py`](config.py). Each spot can override any default:

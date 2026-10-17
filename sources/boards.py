@@ -6,12 +6,14 @@ one-line reason so the site can show its work.
 """
 
 LONGBOARD = "longboard"
+MIDLENGTH = "midlength"
 FISH = "fish"
 SHORTBOARD = "shortboard"
 PERFORMANCE = "performance"
 
 LABELS = {
     LONGBOARD: "Longboard",
+    MIDLENGTH: "Midlength",
     FISH: "Fish",
     SHORTBOARD: "Shortboard",
     PERFORMANCE: "Performance board",
@@ -42,13 +44,19 @@ def recommend(height_ft, period_s, wind_kn=None, wind_rel=None):
     if height_ft < 3.5:
         if period_s >= 13 and clean:
             return _pick(SHORTBOARD, "Small but long-period and clean: these waves have more punch than they look.")
-        return _pick(FISH, "Waist-high and soft: a fish holds speed through the flat sections.")
+        if clean:
+            return _pick(MIDLENGTH, "Small, soft and clean: a midlength paddles in early, glides through the flat sections "
+                                    "and still turns.")
+        return _pick(FISH, "Waist-high and bumpy: a fish holds speed through the chop.")
     if height_ft >= 6:
         return _pick(PERFORMANCE, "Overhead and powerful: bring a refined board you trust, and consider a step-up.")
     if height_ft >= 4 and period_s >= 12 and clean:
         return _pick(PERFORMANCE, "Chest-high-plus, long-period and clean: the kind of wave a performance board rewards.")
     if period_s < 10 or not clean:
         if height_ft < 4.5:
-            return _pick(FISH, "Bumpy or middling swell: a fish stays loose and forgiving.")
+            if clean:
+                return _pick(MIDLENGTH, "Clean but middling swell: a midlength gives you glide and a smooth, "
+                                        "drawn-out line on the softer walls.")
+            return _pick(FISH, "Bumpy swell: a fish stays loose and forgiving.")
         return _pick(SHORTBOARD, "Some size but not much polish: a standard shortboard is the safe all-rounder.")
     return _pick(SHORTBOARD, "Solid, workable waves: a standard shortboard is the right tool.")

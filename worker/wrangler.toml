@@ -1,0 +1,21 @@
+# Cloudflare Worker for Swell Check profiles. Deploy from this folder with:  npx wrangler deploy
+# Full walkthrough in README.md.
+
+name = "swell-profiles"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+# Where the stored profiles live. With no id given, wrangler creates this namespace the first time
+# you deploy and fills the id in; if yours is older and complains, run
+#   npx wrangler kv namespace create PROFILES
+# and paste the id it prints here as `id = "..."`.
+[[kv_namespaces]]
+binding = "PROFILES"
+
+[vars]
+# Sites allowed to call the API from a browser (the live site, and a local preview).
+ALLOWED_ORIGINS = "https://colinwehmann-wq.github.io,http://localhost:8000,http://localhost:8766"
+# New profiles one address can make per hour.
+CREATE_LIMIT_PER_HOUR = "10"
+
+# The alert job's key is a secret, not a variable: set it with  npx wrangler secret put ADMIN_KEY

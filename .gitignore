@@ -8,3 +8,6 @@ __pycache__/
 .DS_Store
 .venv/
 .climate-cache/
+worker/.wrangler/
+worker/node_modules/
+.profile-state.json

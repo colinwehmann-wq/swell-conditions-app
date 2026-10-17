@@ -7,11 +7,13 @@ import urllib.request
 _UA = {"User-Agent": "swell-conditions-app/1.0 (personal surf checker)"}
 
 
-def get(url, timeout=25, tries=3):
+def get(url, timeout=25, tries=3, headers=None):
     last = None
+    hdrs = dict(_UA)
+    hdrs.update(headers or {})
     for attempt in range(tries):
         try:
-            req = urllib.request.Request(url, headers=_UA)
+            req = urllib.request.Request(url, headers=hdrs)
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return r.read().decode("utf-8", "replace")
         except OSError as e:  # URLError, socket.timeout, ConnectionError all subclass this
@@ -20,8 +22,8 @@ def get(url, timeout=25, tries=3):
     raise RuntimeError("GET failed after %d tries: %s (%s)" % (tries, url, last))
 
 
-def get_json(url, timeout=25, tries=3):
-    return json.loads(get(url, timeout, tries))
+def get_json(url, timeout=25, tries=3, headers=None):
+    return json.loads(get(url, timeout, tries, headers))
 
 
 def post(url, body="", headers=None, timeout=15):

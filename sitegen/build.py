@@ -355,6 +355,7 @@ def make_payload(inputs, now):
         "generated": now.isoformat(),
         "generated_label": "%s, %s %s" % (now.strftime("%a %b ") + str(now.day), clock(now), now.strftime("%Z")),
         "site_url": config.SITE_URL,
+        "profiles_api": config.PROFILES_API,
         "repo_url": "https://github.com/colinwehmann-wq/swell-conditions-app",
         "headline": _headline(inputs, now, peaks),
         "peaks": peaks,
@@ -380,6 +381,7 @@ def build(inputs, now, outdir):
     for spot in payload["spots"]:
         _write(os.path.join(outdir, "spots", spot["slug"], "index.html"), render.spot_page(spot, payload))
     _write(os.path.join(outdir, "breaks", "index.html"), render.breaks_page(payload))
+    _write(os.path.join(outdir, "profile", "index.html"), render.profile_page(payload))
     _write(os.path.join(outdir, "404.html"), render.not_found_page(payload))
     _write(os.path.join(outdir, ".nojekyll"), "")
     shutil.copytree(_ASSETS, os.path.join(outdir, "assets"), dirs_exist_ok=True)

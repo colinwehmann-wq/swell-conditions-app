@@ -1,0 +1,10 @@
+{
+  "name": "swell-profiles",
+  "private": true,
+  "type": "module",
+  "description": "Stores anonymous surf profiles (saved breaks and ideal conditions) for Swell Check. See worker/README.md.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "deploy": "wrangler deploy"
+  }
+}

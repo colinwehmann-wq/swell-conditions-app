@@ -46,7 +46,8 @@ formatters + state I/O).
   - [x] Photos for the new breaks (20 free-licensed Commons photos). Bird Rock and Buccaneer Beach
     still show a plain tile: nothing usable turned up. Mission Beach's is the Giant Dipper, not surf.
   - [ ] Have someone who surfs these breaks sanity-check each one's size, tide and swell window.
-  - [ ] Profiles (below) are the natural next step: let people choose their own breaks and ideals.
+  - [x] Profiles: people choose their own breaks and ideals on the My alerts page and get a personal alert about an
+    hour before they peak (Cloudflare Worker + hourly job; see `worker/`). Next: saved breaks (stars) on the home page.
 - [ ] **Website v2.** Per-user thresholds and email/web-push opt-in need a small
   backend (stored subscriptions, unsubscribe links, abuse handling) — deliberately
   out of scope for v1, which keeps the project stateless and data-free.

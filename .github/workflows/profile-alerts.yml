@@ -1,0 +1,53 @@
+name: profile alerts
+
+# Every hour, read everyone's saved profile from the profile service (worker/) and send each person
+# an alert about an hour before their ideal conditions peak at one of their breaks. Quiet when
+# nobody has made a profile yet. See tools/profile_alerts.py and sources/profiles.py.
+#
+# Needs the repository secret PROFILES_ADMIN_KEY (the same key stored in the Worker as ADMIN_KEY).
+# Without it the job does nothing and says so.
+
+on:
+  schedule:
+    - cron: "10 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the alerts instead of sending them (nothing is remembered either)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: profile-alerts        # never two at once: they share the sent-alerts state
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # Which alerts have already gone out, so the same window never pings twice.
+      - name: Restore sent-alerts state
+        uses: actions/cache/restore@v4
+        with:
+          path: .profile-state.json
+          key: profile-state-${{ github.run_id }}
+          restore-keys: profile-state-
+
+      - name: Send profile alerts
+        env:
+          PROFILES_ADMIN_KEY: ${{ secrets.PROFILES_ADMIN_KEY }}
+        run: python3 tools/profile_alerts.py ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+
+      - name: Save sent-alerts state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .profile-state.json
+          key: profile-state-${{ github.run_id }}

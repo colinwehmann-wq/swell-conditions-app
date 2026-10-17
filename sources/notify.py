@@ -60,6 +60,22 @@ def _macos(title, body):
         pass
 
 
+def send_to_topic(topic, title, body, click=None):
+    """One person's alert, to their own private ntfy topic and nowhere else: not the owner's phone,
+    Slack or Mac, and not the public topics. Returns True if ntfy took it."""
+    server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    headers = {"Title": _ascii(title), "Tags": "ocean", "Priority": "high"}
+    if click:
+        headers["Click"] = click
+    print("\n>>> NOTIFY (profile ...%s): %s\n%s\n" % (topic[-4:], title, body))
+    try:
+        http.post("%s/%s" % (server, topic), body=body, headers=headers)
+        return True
+    except Exception as e:  # noqa: BLE001 - best effort; the next hourly run tries again
+        print("  ! ntfy failed (profile ...%s): %s" % (topic[-4:], e))
+        return False
+
+
 def send(title, body, public_topics=(), click=None, private=True):
     """`private=False` is for something that concerns only the public topics (a break that
     isn't one of the owner's own): it never reaches the owner's phone, Slack or Mac."""

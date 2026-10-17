@@ -4,7 +4,7 @@
 // change and delete that profile, so the site keeps it in the browser and offers it as a private
 // link. A second random value, the `topic`, is the private ntfy channel the person's alerts go to.
 //
-//   GET    /api/health                  -> { ok: true }
+//   GET    /api/health                  -> { ok: true, dispatch: last wake-up of the alert job, or null }
 //   POST   /api/profile                 -> 201 { id, topic, profile }
 //   GET    /api/profile/:id             -> { id, topic, profile }
 //   PUT    /api/profile/:id             -> { id, topic, profile }     (replaces the profile)
@@ -12,11 +12,13 @@
 //   GET    /api/admin/profiles?cursor=  -> { profiles: [...], cursor }  (Bearer ADMIN_KEY: the alert job)
 //
 // Bindings: PROFILES (KV), ADMIN_KEY (secret), ALLOWED_ORIGINS (comma-separated, set in wrangler.toml),
-// optional CREATE_LIMIT_PER_HOUR (default 10 new profiles per address per hour).
+// optional CREATE_LIMIT_PER_HOUR (default 10 new profiles per address per hour), and for the cron wake-up
+// GITHUB_DISPATCH_TOKEN (secret), GITHUB_REPO and GITHUB_WORKFLOW (see dispatch.js).
 //
 // Cloudflare's free plan allows 1,000 KV writes and 1,000 list calls a day; a create or an edit is
 // one write (two with the rate limit), and the hourly alert job is 24 list calls a day.
 
+import { dispatch, lastDispatch } from "./dispatch.js";
 import { clean } from "./validate.js";
 
 const MAX_BODY_BYTES = 8192;
@@ -115,7 +117,7 @@ export async function handle(request, env, now = Date.now()) {
     return reply(request, env, 403, { error: "This origin is not allowed." });
   }
 
-  if (path === "/api/health" && method === "GET") return reply(request, env, 200, { ok: true });
+  if (path === "/api/health" && method === "GET") return reply(request, env, 200, { ok: true, dispatch: await lastDispatch(env) });
   if (path === "/api/admin/profiles" && method === "GET") return adminList(request, env, url);
 
   if (path === "/api/profile" && method === "POST") {
@@ -163,5 +165,9 @@ export async function handle(request, env, now = Date.now()) {
 export default {
   fetch(request, env) {
     return handle(request, env);
+  },
+  // Runs on the cron trigger in wrangler.toml: wake the alert job on GitHub (see dispatch.js).
+  scheduled(event, env, ctx) {
+    ctx.waitUntil(dispatch(env, event.scheduledTime || Date.now()));
   },
 };

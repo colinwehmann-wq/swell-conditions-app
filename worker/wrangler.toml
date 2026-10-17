@@ -18,4 +18,15 @@ ALLOWED_ORIGINS = "https://colinwehmann-wq.github.io,http://localhost:8000,http:
 # New profiles one address can make per hour.
 CREATE_LIMIT_PER_HOUR = "10"
 
-# The alert job's key is a secret, not a variable: set it with  npx wrangler secret put ADMIN_KEY
+# Which workflow the 30-minute wake-up runs (see src/dispatch.js).
+GITHUB_REPO = "colinwehmann-wq/swell-conditions-app"
+GITHUB_WORKFLOW = "profile-alerts.yml"
+GITHUB_REF = "main"
+
+# Wake the alert job every 30 minutes. GitHub's own schedule drifts by hours on a quiet repository.
+[triggers]
+crons = ["*/30 * * * *"]
+
+# Secrets, not variables. Set each with  npx wrangler secret put <NAME>
+#   ADMIN_KEY             lets the alert job read every profile
+#   GITHUB_DISPATCH_TOKEN a fine-grained GitHub token that can only run Actions on this repository

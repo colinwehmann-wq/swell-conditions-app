@@ -116,6 +116,20 @@ class Links(unittest.TestCase):
         for prefix in ("", "../", "../../"):
             self.assertIn('href="%smap/"' % (prefix or "./"), render._header(prefix))
 
+    def test_map_is_a_button_beside_my_alerts_not_only_inside_the_menu_phones_hide(self):
+        for prefix in ("", "../", "../../"):
+            header = render._header(prefix)
+            href = "%smap/" % (prefix or "./")
+            nav = header[header.index("<nav"):header.index("</nav>")]
+            self.assertNotIn(href, nav)
+            self.assertIn('<a class="top-tab" href="%s">Map</a>' % href, header)
+            self.assertLess(header.index('class="top-tab"'), header.index('class="top-cta"'))
+
+    def test_the_phone_menu_still_offers_the_colour_theme(self):
+        # The header's own theme button is hidden on the narrowest phones to make room.
+        header = render._header("")
+        self.assertEqual(header.count("data-theme-toggle"), 2)
+
     def test_the_home_page_and_break_pages_link_to_it(self):
         self.assertIn('href="map/"', inspect.getsource(render.index_page))
         self.assertIn('href="../../map/#%s"', inspect.getsource(render.spot_page))

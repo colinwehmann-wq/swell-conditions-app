@@ -408,7 +408,7 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .rv.in { opacity: 1; transform: none; }
 
 /* a little life on the things you can touch */
-.btn, .chip, .top-cta, .theme, .menu, .dir-link, .nav a { transition: background-color 0.18s ease, filter 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
+.btn, .chip, .top-cta, .top-tab, .theme, .menu, .dir-link, .nav a { transition: background-color 0.18s ease, filter 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
 .btn:active, .top-cta:active { transform: scale(0.97); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -477,3 +477,19 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .map-mode button[aria-pressed="true"] { background: var(--btn); color: #fff; }
 .map-title { max-width: calc(100% - 24px); }
 @media (max-width: 560px) { .map-title p { display: none; } .map-mode { top: 58px; left: 12px; right: auto; } }
+
+/* ---- "Map" sits beside "My alerts" in the header, on every screen ---- */
+.top-tab { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border: 1px solid var(--axis); border-radius: 999px; background: transparent; color: var(--ink); font-size: 0.88rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.top-tab:hover { background: var(--wash); }
+.nav-theme { display: none; }
+@media (max-width: 640px) {
+  .top-in { gap: 8px; }
+  .nav.is-open .nav-theme { display: block; width: 100%; padding: 12px 0; border: 0; border-top: 1px solid var(--hair); background: none; color: var(--ink-2); font: inherit; font-size: 1rem; text-align: left; cursor: pointer; }
+}
+@media (max-width: 480px) { .top .theme { display: none; } }
+@media (max-width: 400px) {
+  .brand { font-size: 1.05rem; gap: 0.35em; }
+  .top-tab, .top-cta { padding: 0 11px; font-size: 0.82rem; }
+}
+.brand { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 340px) { .brand-mark { display: none; } .brand { font-size: 1rem; } }

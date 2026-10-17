@@ -353,8 +353,11 @@ def _anchors():
             with open(_BENCHMARKS) as f:
                 data = json.load(f)
             _anchor_cache["anchors"] = {slug: b["anchors"] for slug, b in data["breaks"].items()}
+            _anchor_cache["benchmarks"] = {slug: {"typical": b["typical"], "days_per_year": b["days_per_year"],
+                                                  "history": b["history"]} for slug, b in data["breaks"].items()}
         except (OSError, ValueError, KeyError):
             _anchor_cache["anchors"] = {}
+            _anchor_cache["benchmarks"] = {}
     return _anchor_cache["anchors"]
 
 
@@ -365,5 +368,6 @@ def spot_config(spot):
     anchors = _anchors().get(cfg["slug"])
     if anchors:
         cfg["rating_anchors"] = anchors
+        cfg["benchmark"] = _anchor_cache["benchmarks"][cfg["slug"]]
     cfg["ntfy_topic"] = public_topic(cfg["slug"])
     return cfg

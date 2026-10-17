@@ -185,8 +185,23 @@ def _spot(item, now):
             "tide_ft": cfg["tide_ideal_ft"],
             "wind_max_kn": cfg["wind_max_kn"],
         },
+        "benchmark": _benchmark(cfg.get("benchmark")),
         "ntfy": _ntfy(cfg["ntfy_topic"]),
     }
+
+
+def _benchmark(b):
+    """What a 7 and a 9 have looked like at this break (from tools/build_benchmarks.py), or None."""
+    if not b or not b.get("typical"):
+        return None
+    out = {"days_per_year": b["days_per_year"], "years": int(round(b["history"]["days"] / 365.25)), "typical": {}}
+    for rating, t in b["typical"].items():
+        out["typical"][rating] = {
+            "label": words.rating_label(float(rating)), "size_ft": t["size_ft"], "period_s": t["period_s"],
+            "swell_dir": words.compass(t["swell_dir_deg"]), "swell_dir_deg": t["swell_dir_deg"],
+            "wind_kn": t["wind_kn"], "tide_ft": t["tide_ft"], "hour": t["hour"],
+        }
+    return out
 
 
 def _directory_entry(s):

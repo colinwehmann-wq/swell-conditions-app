@@ -290,7 +290,7 @@ def alert_title(res):
         return "%s: go surf — %s, %.1f/10" % (res["name"], _rating_label(rt).upper(), rt)
     w = res["window"]
     rt = _rating(w["peak_score"])
-    return "%s: window coming — peak ~%s, %.0f/10" % (res["name"], clock(w["peak"]), rt)
+    return "%s: window coming — peak ~%s, %.1f/10" % (res["name"], clock(w["peak"]), rt)
 
 
 def _peak_row(w):
@@ -442,10 +442,10 @@ def digest_title(results, now):
     r = _rating(best["rating_score"])
     when = _time_of_day(now)
     if best["verdict"] == "GO":
-        return "%s check: %s is ON (%.0f/10)" % (when, best["name"], r)
+        return "%s check: %s is ON (%.1f/10)" % (when, best["name"], r)
     if best["verdict"] == "LATER":
-        return "%s check: %s window later (%.0f/10)" % (when, best["name"], r)
-    return "%s check: nothing today (best %.0f/10)" % (when, r)
+        return "%s check: %s window later (%.1f/10)" % (when, best["name"], r)
+    return "%s check: nothing today (best %.1f/10)" % (when, r)
 
 
 def _last_alert_note(meta, now):

@@ -10,7 +10,7 @@ WEIGHTS = {"height": 0.34, "period": 0.24, "swell_dir": 0.14, "wind": 0.20, "tid
 
 # Bump this whenever the scoring maths changes: the per-break rating anchors in benchmarks.json
 # were measured with it, and a test refuses to run if they're stale (see sources/climate.py).
-SCORING_VERSION = 2
+SCORING_VERSION = 3
 
 # When a hard gate fails (too small, too short, blown out) the rating is capped here: "Poor" at
 # best, however good the other factors look.
@@ -28,7 +28,7 @@ PEAK_PERIOD_CAP_S = 20.0
 PEAK_PERIOD_SHARE = 0.20       # share of the period score that only the longest swells earn
 SIZE_PEAK_WEIGHT = 0.15        # how much being off the middle of the size band costs
 TIDE_PEAK_WEIGHT = 0.10
-DIR_PEAK_WEIGHT = 0.10         # how much being at the edge of the swell window costs
+DIR_PEAK_WEIGHT = 0.45         # how much being at the edge of the swell window costs (a south swell at a west-facing break is not a peak day)
 
 
 # --------------------------------------------------------------------------- math

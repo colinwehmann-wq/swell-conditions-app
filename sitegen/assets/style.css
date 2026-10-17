@@ -343,3 +343,31 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 @media (max-width: 760px) { .foot-grid { grid-template-columns: 1fr; } .foot-credits ul { columns: 1; } }
 
 @media print { .top, .subs, .theme, .tip { display: none; } }
+
+/* ---- profile page ---- */
+.pf-form, .pf-saved { max-width: 720px; }
+.pf h2 { font-family: var(--serif); font-size: 1.3rem; margin: 32px 0 12px; }
+.pf h2:first-child { margin-top: 0; }
+.pf-breaks { display: grid; gap: 14px; }
+.pf-area { border: 0; margin: 0; padding: 0; }
+.pf-area legend { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 0; margin-bottom: 6px; }
+.pf-check { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin: 0 16px 0 0; cursor: pointer; }
+.pf-check input, .pf-radio input { width: 18px; height: 18px; accent-color: var(--btn); }
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 20px; margin: 14px 0; }
+.pf-field { display: grid; gap: 6px; font-size: 0.9rem; color: var(--ink-2); }
+.pf-field input, .pf-field select, .pf-link { min-height: 44px; padding: 0 12px; border: 1px solid var(--axis); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 1rem; }
+.pf-field input:disabled, .pf-field select:disabled { opacity: 0.45; }
+.pf-field input:focus-visible, .pf-field select:focus-visible, .pf-link:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.pf-wind { border: 0; margin: 14px 0; padding: 0; display: grid; gap: 4px; }
+.pf-wind legend { font-size: 0.9rem; color: var(--ink-2); padding: 0; margin-bottom: 6px; }
+.pf-radio { display: flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; }
+.pf-inline { max-width: 200px; margin-top: 8px; }
+.pf-quiet { align-items: end; }
+.pf-errors { margin: 18px 0 0; padding: 12px 16px 12px 32px; border: 1px solid var(--bad); border-radius: 8px; color: var(--ink); }
+.pf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 24px; }
+.pf-status { font-size: 0.9rem; }
+.pf-saved { margin-top: 40px; padding-top: 8px; border-top: 1px solid var(--hair); }
+.pf-saved .subs { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.pf-link { flex: 1; min-width: 0; }
+.how-small { padding-left: 20px; display: grid; gap: 14px; }
+@media (max-width: 480px) { .pf-check { margin-right: 10px; } }

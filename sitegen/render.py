@@ -156,7 +156,7 @@ def _header(prefix):
         '<a class="brand" href="%(p)s"><span class="brand-mark" aria-hidden="true">≈</span>Swell Check</a>'
         '<nav class="nav" aria-label="Primary">'
         '<a href="%(p)s#now">Now</a><a href="%(p)sbreaks/">All breaks</a><a href="%(p)s#week">Week</a>'
-        '<a href="%(p)s#alerts">Alerts</a><a href="%(p)s#how">How it works</a></nav>'
+        '<a href="%(p)s#alerts">Alerts</a><a href="%(p)sprofile/">My alerts</a><a href="%(p)s#how">How it works</a></nav>'
         '<button class="theme" type="button" aria-label="Switch colour theme" data-theme-toggle>'
         '<span aria-hidden="true">◐</span></button>'
         '</div></header>' % {"p": prefix or "./"}
@@ -533,6 +533,99 @@ def breaks_page(payload):
     return _shell("All breaks — Swell Check",
                   "Live surf ratings for all %d breaks in San Diego County, Oceanside to the border." % total,
                   body, "../", payload, "breaks", scripts=("search.js",))
+
+
+_COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+
+
+def _hour_options(selected):
+    out = []
+    for h in range(24):
+        label = "%d %s" % (h % 12 or 12, "AM" if h < 12 else "PM")
+        out.append('<option value="%d"%s>%s</option>' % (h, " selected" if h == selected else "", label))
+    return "".join(out)
+
+
+def _dir_options():
+    return '<option value="">any direction</option>' + "".join(
+        '<option value="%s">%s</option>' % (("%g" % (i * 22.5)), name) for i, name in enumerate(_COMPASS_16))
+
+
+def profile_page(payload):
+    """Pick breaks and ideal conditions; the script (assets/profile.js) saves them to the profile service."""
+    groups = {}
+    for b in payload["breaks"]:
+        groups.setdefault(b["area"], []).append(b)
+    picks = "".join(
+        '<fieldset class="pf-area"><legend>%s</legend>%s</fieldset>' % (
+            esc(area), "".join('<label class="pf-check"><input type="checkbox" name="break" value="%s"> %s</label>'
+                               % (esc(b["slug"]), esc(b["name"])) for b in items))
+        for area, items in groups.items())
+    head = (
+        '<section class="page-head"><div class="wrap"><p class="crumb"><a href="../">← San Diego County</a></p>'
+        '<h1>My alerts</h1><p class="lede">Choose your breaks and what you call ideal. When those conditions are about to '
+        'line up at one of them, you get a notification about an hour before the peak. No account, no email.</p></div></section>'
+    )
+    form = (
+        '<section class="sec"><div class="wrap pf" data-profile-root data-api="%s">'
+        '<noscript><p class="note">This page needs JavaScript to save your profile.</p></noscript>'
+        '<form class="pf-form" novalidate>'
+        '<h2>Your breaks</h2><div class="pf-breaks">%s</div>'
+        '<h2>Your ideal conditions</h2>'
+        '<div class="pf-grid">'
+        '<label class="pf-field">Wave height, from <span class="muted">ft</span><input name="height_min" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
+        '<label class="pf-field">to <span class="muted">ft</span><input name="height_max" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
+        '<label class="pf-field">Swell period at least <span class="muted">seconds</span><input name="period_min" type="number" step="1" min="0" max="25" inputmode="decimal"></label>'
+        '</div>'
+        '<fieldset class="pf-wind"><legend>Wind</legend>'
+        '<label class="pf-radio"><input type="radio" name="wind" value="offshore"> Offshore only <span class="muted">(or glassy calm)</span></label>'
+        '<label class="pf-radio"><input type="radio" name="wind" value="light"> Light, any direction</label>'
+        '<label class="pf-radio"><input type="radio" name="wind" value="any"> I don\'t mind</label>'
+        '<label class="pf-field pf-inline">Top speed <span class="muted">knots</span><input name="wind_max" type="number" step="1" min="0" max="40" inputmode="decimal"></label>'
+        '</fieldset>'
+        '<div class="pf-grid">'
+        '<label class="pf-field">Swell from<select name="dir_from">%s</select></label>'
+        '<label class="pf-field">to<select name="dir_to">%s</select></label>'
+        '</div>'
+        '<div class="pf-grid">'
+        '<label class="pf-field">Tide, lowest <span class="muted">ft, blank = any</span><input name="tide_min" type="number" step="0.5" min="-3" max="8" inputmode="decimal"></label>'
+        '<label class="pf-field">highest <span class="muted">ft</span><input name="tide_max" type="number" step="0.5" min="-3" max="8" inputmode="decimal"></label>'
+        '</div>'
+        '<h2>Your alerts</h2>'
+        '<div class="pf-grid">'
+        '<label class="pf-field">Tell me<select name="lead_min"><option value="30">30 minutes before the peak</option>'
+        '<option value="60">an hour before the peak</option><option value="90">90 minutes before</option>'
+        '<option value="120">2 hours before</option><option value="180">3 hours before</option></select></label>'
+        '<label class="pf-field">Only if it lasts<select name="min_hours"><option value="1">at least 1 hour</option>'
+        '<option value="2">at least 2 hours</option><option value="3">at least 3 hours</option></select></label>'
+        '</div>'
+        '<div class="pf-grid pf-quiet"><label class="pf-check"><input type="checkbox" name="quiet_on"> Quiet hours</label>'
+        '<label class="pf-field">from<select name="quiet_from">%s</select></label>'
+        '<label class="pf-field">until<select name="quiet_to">%s</select></label></div>'
+        '<ul class="pf-errors" data-pf-errors role="alert" hidden></ul>'
+        '<div class="pf-actions"><button class="btn btn-primary" type="submit" data-pf-save>Save my profile</button>'
+        '<button class="btn btn-ghost" type="button" data-pf-delete hidden>Delete my profile</button>'
+        '<span class="pf-status muted" data-pf-status role="status" aria-live="polite"></span></div>'
+        '</form>'
+        '<div class="pf-saved" data-pf-saved hidden>'
+        '<h2>Get the alerts on your phone</h2>'
+        '<ol class="how-small"><li>Install the free <a href="%s" rel="noopener">ntfy</a> app (<a href="%s" rel="noopener">Android</a>).</li>'
+        '<li>Subscribe to your private channel: <div class="subs"><a class="btn btn-primary" data-pf-app href="#">Open in ntfy app</a>'
+        '<a class="btn" data-pf-web href="#" rel="noopener" target="_blank">Subscribe on the web</a>'
+        '<button class="btn btn-ghost" type="button" data-pf-copy-topic>Copy topic</button></div>'
+        '<p class="note">Your channel is <code data-pf-topic></code>. Keep it to yourself: anyone who knows it can read your alerts.</p></li>'
+        '<li>Check it works: <button class="btn" type="button" data-pf-test>Send me a test alert</button></li></ol>'
+        '<h2>Your private link</h2>'
+        '<p class="sec-lede">This link opens your profile on any device. Anyone who has it can change it, so keep it private.</p>'
+        '<div class="subs"><input class="pf-link" data-pf-link type="text" readonly aria-label="Your private link">'
+        '<button class="btn" type="button" data-pf-copy-link>Copy link</button></div>'
+        '</div></div></section>'
+        % (esc(payload.get("profiles_api", "")), picks, _dir_options(), _dir_options(), _hour_options(22), _hour_options(4),
+           _IOS, _ANDROID)
+    )
+    return _shell("My alerts — Swell Check",
+                  "Choose your breaks and ideal conditions and get a surf alert about an hour before they line up.",
+                  head + form, "../", payload, "profile", scripts=("profile.js",))
 
 
 def spot_page(spot, payload):

@@ -159,6 +159,7 @@ process.stdout.write(JSON.stringify({
   hashes: input.hashes.map(h => M.slugFromHash(h, input.slugs)),
   far: input.zooms.map(z => M.isFar(z)),
   label: M.pinLabel({ name: "Swami's", label: 'Good', rating: 7.04 }),
+  tips: input.tips.map(p => M.tipParts(p)),
   modes: input.modes.map(m => M.validMode(m)),
   tiles: M.TILES, farZoom: M.FAR_ZOOM, sat: M.SATELLITE_MIN_ZOOM, native: M.NATIVE_ZOOM,
   glyphs: M.GLYPH,
@@ -169,7 +170,7 @@ process.stdout.write(JSON.stringify({
 @unittest.skipUnless(NODE, "Node is not installed")
 class Script(unittest.TestCase):
     def run_js(self, **kw):
-        base = {"hashes": [], "slugs": ["swamis", "d-street"], "zooms": [], "modes": []}
+        base = {"hashes": [], "slugs": ["swamis", "d-street"], "zooms": [], "modes": [], "tips": []}
         base.update(kw)
         out = subprocess.run([NODE, "-e", RUNNER, MAP_JS], input=json.dumps(base), capture_output=True, text=True, timeout=60, check=True)
         return json.loads(out.stdout)
@@ -181,6 +182,21 @@ class Script(unittest.TestCase):
     def test_pins_shrink_to_dots_when_zoomed_out(self):
         r = self.run_js(zooms=[9, 10, 10.5, 11, 12, 16])
         self.assertEqual(r["far"], [True, True, True, False, False, False])
+
+    def test_the_hover_label_says_which_break_and_how_it_rates(self):
+        tips = self.run_js(tips=[{"name": "Swami's", "band": "yellow", "rating": 5.55, "label": "Fair"},
+                                 {"name": "Blacks", "band": "red", "rating": 1.9, "label": "Very poor"}])["tips"]
+        self.assertEqual((tips[0]["name"], tips[0]["glyph"], tips[0]["label"]), ("Swami's", "!", "Fair"))
+        self.assertIn(tips[0]["rating"], ("5.5", "5.6"))       # one decimal, whichever way .55 rounds
+        self.assertEqual(tips[1], {"name": "Blacks", "glyph": "✕", "rating": "1.9", "label": "Very poor"})
+
+    def test_pins_have_a_label_on_hover_and_focus_and_no_slow_native_tooltip(self):
+        js = read(MAP_JS)
+        self.assertIn("bindTooltip", js)
+        self.assertIn("openTooltip", js)
+        self.assertIn("closeTooltip", js)
+        self.assertIn("aria-label", js)                    # the pin's accessible name, now that title is gone
+        self.assertNotRegex(js, r"title:\s*pinLabel")
 
     def test_the_pin_label_reads_well_aloud(self):
         self.assertEqual(self.run_js()["label"], "Swami's, Good, 7.0 out of 10")

@@ -493,3 +493,10 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 }
 .brand { white-space: nowrap; flex-shrink: 0; }
 @media (max-width: 340px) { .brand-mark { display: none; } .brand { font-size: 1rem; } }
+
+/* the label that appears over a pin on hover or focus */
+.leaflet-tooltip.pin-tip { padding: 7px 11px; border: 1px solid var(--axis); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); font: inherit; white-space: nowrap; pointer-events: none; }
+.leaflet-tooltip-top.pin-tip::before { border-top-color: var(--axis); }
+.tip-in { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+.tip-in strong { font-size: 0.92rem; font-weight: 650; }
+.tip-rate { font-size: 0.82rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }

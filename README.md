@@ -123,6 +123,14 @@ private link, and each person gets a private ntfy channel.
 - [`tools/profile_alerts.py`](tools/profile_alerts.py) and [`profile-alerts.yml`](.github/workflows/profile-alerts.yml):
   the hourly job that reads every profile, checks the forecast and sends the alerts. Needs the `PROFILES_ADMIN_KEY` secret.
 
+## The map
+
+[`/map/`](https://colinwehmann-wq.github.io/swell-conditions-app/map/) shows every break as a pin with its rating; tap one for its
+photo, conditions and best window. It is a satellite view (with a plain map option) built on
+[Leaflet](https://leafletjs.com), stored unmodified in [`sitegen/assets/vendor/leaflet/`](sitegen/assets/vendor/leaflet/SOURCE.txt) with
+its checksums, and the U.S. Geological Survey's The National Map tiles, which are free and need no key. (The popular CARTO and
+Stadia basemaps now require one.) A break page links to its place on the map with `map/#<break>`.
+
 ## Tuning
 
 Everything is in [`config.py`](config.py). Each spot can override any default:

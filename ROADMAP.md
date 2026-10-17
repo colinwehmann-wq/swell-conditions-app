@@ -45,6 +45,7 @@ formatters + state I/O).
   home page that shows the county's best five. Only the original five reach the owner's phone.
   - [x] Photos for the new breaks (20 free-licensed Commons photos). Bird Rock and Buccaneer Beach
     still show a plain tile: nothing usable turned up. Mission Beach's is the Giant Dipper, not surf.
+  - [x] A map: every break as a pin with its rating, a card on tap, satellite or topo (USGS tiles, no key).
   - [ ] Have someone who surfs these breaks sanity-check each one's size, tide and swell window.
   - [x] Profiles: people choose their own breaks and ideals on the My alerts page and get a personal alert about an
     hour before they peak (Cloudflare Worker + hourly job; see `worker/`). Next: saved breaks (stars) on the home page.

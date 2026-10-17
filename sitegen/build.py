@@ -382,6 +382,7 @@ def build(inputs, now, outdir):
         _write(os.path.join(outdir, "spots", spot["slug"], "index.html"), render.spot_page(spot, payload))
     _write(os.path.join(outdir, "breaks", "index.html"), render.breaks_page(payload))
     _write(os.path.join(outdir, "profile", "index.html"), render.profile_page(payload))
+    _write(os.path.join(outdir, "map", "index.html"), render.map_page(payload))
     _write(os.path.join(outdir, "404.html"), render.not_found_page(payload))
     _write(os.path.join(outdir, ".nojekyll"), "")
     shutil.copytree(_ASSETS, os.path.join(outdir, "assets"), dirs_exist_ok=True)

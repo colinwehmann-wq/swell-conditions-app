@@ -43,18 +43,22 @@
       else localStorage.setItem('theme', next);
     } catch (e) { /* storage blocked: theme just won't persist */ }
   }
-  var toggle = document.querySelector('[data-theme-toggle]');
-  if (toggle) {
+  var toggles = document.querySelectorAll('[data-theme-toggle]');      // the header button, and the one in the phone menu
+  if (toggles.length) {
     var names = { system: 'match device', light: 'light', dark: 'dark' };
     var sync = function () {
       var label = 'Theme: ' + names[choice()];
-      toggle.setAttribute('aria-label', label + '. Activate to change.');
-      toggle.title = label;
+      Array.prototype.forEach.call(toggles, function (t) {
+        t.setAttribute('aria-label', label + '. Activate to change.');
+        t.title = label;
+      });
     };
     sync();
-    toggle.addEventListener('click', function () {
-      applyTheme({ system: 'light', light: 'dark', dark: 'system' }[choice()]);
-      sync();
+    Array.prototype.forEach.call(toggles, function (t) {
+      t.addEventListener('click', function () {
+        applyTheme({ system: 'light', light: 'dark', dark: 'system' }[choice()]);
+        sync();
+      });
     });
   }
 

@@ -246,7 +246,7 @@ class Photos(unittest.TestCase):
         payload = sitegen.make_payload(make_inputs(now, spots=(0, 1, 2, 3, 4)), now)
         index = render.index_page(payload)
         hero = media.PHOTOS[media.HERO_SLUG]["file"]
-        self.assertIn('class="hero has-photo"', index)
+        self.assertIn('class="hero has-photo curtain"', index)
         self.assertIn('src="assets/img/%s"' % hero, index)
         self.assertEqual(index.count('class="row-photo"'), 5)
         # thumbnails sit beside a text heading, so they're decorative; they must not add noise for screen readers
@@ -290,6 +290,44 @@ class Photos(unittest.TestCase):
             for p in media.PHOTOS.values():
                 self.assertTrue(os.path.exists(os.path.join(out, "assets", "img", p["file"])), p["file"])
                 self.assertTrue(os.path.exists(os.path.join(out, "assets", "img", media.tile(p)[0])), p["file"])
+
+
+class SmoothScroll(unittest.TestCase):
+    """The page slides up over the hero photo, and nothing is hidden without the script."""
+
+    def pages(self):
+        from sitegen.build import make_payload
+        now = at(0, 10)
+        payload = make_payload(make_inputs(now), now)
+        return render.index_page(payload), render.spot_page(payload["spots"][0], payload)
+
+    def test_home_and_break_pages_put_everything_under_the_hero_in_one_sheet(self):
+        for html in self.pages():
+            self.assertEqual(html.count('<div class="sheet">'), 1)
+            self.assertLess(html.index("curtain"), html.index('<div class="sheet">'))
+            self.assertLess(html.index('<div class="sheet">'), html.index("<footer"))
+
+    def test_nothing_is_hidden_by_default(self):
+        # The fade-in class is added by the script, so a page without it is fully visible.
+        for html in self.pages():
+            self.assertNotIn("rv", re.findall(r'class="([^"]*)"', html))
+
+    def test_css_and_script_cover_motion_and_reduced_motion(self):
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sitegen", "assets")
+        with open(os.path.join(base, "style.css")) as f:
+            css = f.read()
+        with open(os.path.join(base, "site.js")) as f:
+            js = f.read()
+        self.assertIn(".curtain { position: sticky", css)
+        self.assertIn(".sheet {", css)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", css[css.index(".curtain { position: sticky"):])
+        self.assertIn("prefers-reduced-motion: reduce", js)
+        self.assertIn("setProperty('--p'", js)
+        self.assertIn("passive: true", js)
+
+    def test_the_header_stays_in_view(self):
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sitegen", "assets", "style.css")) as f:
+            self.assertIn(".top { position: sticky; top: 0;", f.read())
 
 
 class Build(unittest.TestCase):

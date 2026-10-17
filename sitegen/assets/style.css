@@ -388,3 +388,35 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
   .nav.is-open a { padding: 12px 0; font-size: 1rem; border-top: 1px solid var(--hair); }
   .nav.is-open a:first-child { border-top: 0; }
 }
+
+/* ---- smoother scrolling: the page slides up over the hero photo ---- */
+.top { position: sticky; top: 0; z-index: 30; }
+:root { --head: 61px; }
+.curtain { position: sticky; top: var(--head); z-index: 0; --p: 0; }
+.curtain .hero-text, .curtain .spot-hero-in, .curtain .hero-fig { will-change: opacity, transform; }
+.curtain > .wrap { opacity: calc(1 - var(--p) * 1.15); transform: translateY(calc(var(--p) * -28px)); }
+.curtain .hero-bg { filter: brightness(calc(1 - var(--p) * 0.55)); transform: translateY(calc(var(--p) * 36px)); }
+.sheet { position: relative; z-index: 1; background: var(--page); margin-top: -26px; border-radius: 24px 24px 0 0; box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.28); }
+.sheet > .sec:first-child, .sheet > .finder-sec:first-child { border-top: 0; }
+.sheet > .finder-sec:first-child { padding-top: 40px; }
+.curtain .photo-credit { bottom: 38px; }
+.curtain.has-photo { padding-bottom: 82px; }
+.sec[id], .finder-sec { scroll-margin-top: calc(var(--head) + 8px); }
+
+/* sections ease in as they arrive (the script adds .rv, then .in); without the script nothing is hidden */
+.rv { opacity: 0; transform: translateY(22px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.rv.in { opacity: 1; transform: none; }
+
+/* a little life on the things you can touch */
+.btn, .chip, .top-cta, .theme, .menu, .dir-link, .nav a { transition: background-color 0.18s ease, filter 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
+.btn:active, .top-cta:active { transform: scale(0.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .curtain { position: relative; top: auto; }
+  .curtain > .wrap, .curtain .hero-bg { opacity: 1; transform: none; filter: none; }
+  .sheet { margin-top: 0; border-radius: 0; box-shadow: none; }
+  .curtain.has-photo { padding-bottom: 56px; }
+  .curtain .photo-credit { bottom: 10px; }
+  .rv { opacity: 1; transform: none; transition: none; }
+}
+@media print { .rv { opacity: 1 !important; transform: none !important; } .curtain { position: relative; } .sheet { box-shadow: none; margin-top: 0; } }

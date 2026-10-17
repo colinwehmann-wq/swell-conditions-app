@@ -17,6 +17,20 @@
     }
   }
 
+  /* ---- phone menu: the links are hidden on a narrow screen until the button opens them ---- */
+  var menuBtn = document.querySelector('[data-menu]');
+  var navEl = document.getElementById('nav');
+  if (menuBtn && navEl) {
+    menuBtn.hidden = false;
+    var setMenu = function (open) {
+      navEl.classList.toggle('is-open', open);
+      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    menuBtn.addEventListener('click', function () { setMenu(!navEl.classList.contains('is-open')); });
+    navEl.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('a')) setMenu(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
+  }
+
   /* ---- theme: system -> light -> dark ---- */
   function choice() {
     try { return localStorage.getItem('theme') || 'system'; } catch (e) { return 'system'; }

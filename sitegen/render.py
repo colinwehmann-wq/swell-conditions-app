@@ -154,9 +154,12 @@ def _header(prefix):
     return (
         '<header class="top"><div class="wrap top-in">'
         '<a class="brand" href="%(p)s"><span class="brand-mark" aria-hidden="true">≈</span>Swell Check</a>'
-        '<nav class="nav" aria-label="Primary">'
+        '<nav class="nav" id="nav" aria-label="Primary">'
         '<a href="%(p)s#now">Now</a><a href="%(p)sbreaks/">All breaks</a><a href="%(p)s#week">Week</a>'
-        '<a href="%(p)s#alerts">Alerts</a><a href="%(p)sprofile/">My alerts</a><a href="%(p)s#how">How it works</a></nav>'
+        '<a href="%(p)s#alerts">Alerts</a><a href="%(p)s#how">How it works</a></nav>'
+        '<a class="top-cta" href="%(p)sprofile/">My alerts</a>'
+        '<button class="menu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav" data-menu hidden>'
+        '<span aria-hidden="true">☰</span></button>'
         '<button class="theme" type="button" aria-label="Switch colour theme" data-theme-toggle>'
         '<span aria-hidden="true">◐</span></button>'
         '</div></header>' % {"p": prefix or "./"}
@@ -442,6 +445,7 @@ def index_page(payload):
     finder = (
         '<section class="finder-sec"><div class="wrap">%s'
         '<p class="finder-alt"><a href="breaks/">Browse all %d breaks, Oceanside to the border →</a></p>'
+        '<p class="finder-alt"><a href="profile/">Get alerts for the conditions you like →</a></p>'
         '</div></section>'
         '<script type="application/json" id="breaks-data">%s</script>'
         % (_finder_form(), total, _json_for_script(payload.get("breaks", [])))
@@ -469,6 +473,11 @@ def index_page(payload):
         '<section id="alerts" class="sec"><div class="wrap"><h2>Get the alerts</h2>'
         '<p class="sec-lede">A notification only when a break is genuinely worth paddling out for — '
         'plus a heads-up when a good window is about to open. No account, no email.</p>'
+        '<div class="cta-card"><div><h3>Alerts tuned to you</h3>'
+        '<p>Pick your breaks and what you call ideal: wave height, wind, swell direction, tide. We message you about an hour '
+        'before those conditions peak, so you know exactly when to go.</p></div>'
+        '<a class="btn btn-primary" href="profile/">Set up my alerts</a></div>'
+        '<p class="sec-lede">Or follow a break or the county\'s daily digest, the same alerts for everyone:</p>'
         '<ol class="steps"><li><strong>Get ntfy.</strong> A free, open-source notification app: '
         '<a href="%s" rel="noopener">iPhone</a> · <a href="%s" rel="noopener">Android</a> · or use it in the browser.</li>'
         '<li><strong>Pick your breaks.</strong> Every one of the %d breaks has its own channel: '
@@ -709,7 +718,10 @@ def spot_page(spot, payload):
     likes += _rated_section(spot)
     alerts = (
         '<section id="alerts" class="sec"><div class="wrap"><h2>Get %s alerts</h2>'
-        '<p class="sec-lede">One notification when %s is worth paddling out for. Needs the free '
+        '<div class="cta-card"><div><h3>Want it tuned to your conditions?</h3>'
+        '<p>Set your own size, wind and tide, and get told about an hour before they line up here and at your other breaks.</p></div>'
+        '<a class="btn btn-primary" href="../../profile/">Set up my alerts</a></div>'
+        '<p class="sec-lede">Or one notification whenever %s is rated worth paddling out for. Needs the free '
         '<a href="%s" rel="noopener">ntfy</a> app (<a href="%s" rel="noopener">Android</a>) — no account.</p>%s'
         '<p class="note">ntfy channels are public: anyone who knows the name can read or post to it.</p></div></section>'
         % (esc(spot["name"]), esc(spot["name"]), _IOS, _ANDROID, subscribe_buttons(spot["name"], spot["ntfy"])))

@@ -201,7 +201,7 @@ python3 -m http.server 8000 --directory _site     # then open http://localhost:8
 ```
 
 **Board picks** come from `sources/boards.py` — a transparent rule of thumb
-(longboard / fish / shortboard / performance board) based on size, period and wind;
+(longboard / midlength / fish / shortboard / performance board) based on size, period and wind;
 every pick carries a one-line reason. **Enabling Pages:** repo Settings → Pages →
 Source: *GitHub Actions* (the repo must be public on a free plan).
 

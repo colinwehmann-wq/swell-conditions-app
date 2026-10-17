@@ -199,7 +199,7 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .legend li { display: inline-flex; gap: 8px; align-items: center; }
 
 /* ---- boards ---- */
-.boards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin: 0; }
+.boards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin: 0; }
 .boards dt { font-family: var(--serif); font-size: 1.2rem; margin-bottom: 4px; }
 .boards dd { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
 @media (max-width: 860px) { .boards { grid-template-columns: repeat(2, 1fr); } }

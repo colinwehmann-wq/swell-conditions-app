@@ -18,7 +18,8 @@ _ICO = {"green": "✓", "yellow": "!", "orange": "▼", "red": "✕"}
 
 _BOARD_BLURBS = [
     ("Longboard", "Small or mushy waves. Paddle power and glide do the work."),
-    ("Fish", "Waist-high and soft, or bumpy. Short, wide and forgiving."),
+    ("Midlength", "Small to chest-high, soft but clean. Glide and easy paddling, still turns."),
+    ("Fish", "Waist-high and bumpy, or short-period. Short, wide and forgiving."),
     ("Shortboard", "Solid, workable waves. The everyday all-rounder."),
     ("Performance board", "Chest-high or bigger, long-period and clean. Hollow, powerful faces."),
 ]

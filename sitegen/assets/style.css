@@ -371,3 +371,20 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .pf-link { flex: 1; min-width: 0; }
 .how-small { padding-left: 20px; display: grid; gap: 14px; }
 @media (max-width: 480px) { .pf-check { margin-right: 10px; } }
+
+/* ---- finding "My alerts" ---- */
+.top { position: relative; }
+.top-cta { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border-radius: 999px; background: var(--btn); color: #fff; font-size: 0.88rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.top-cta:hover { filter: brightness(1.08); }
+.menu { display: none; border: 1px solid var(--hair); background: var(--surface); color: var(--ink-2); width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 1rem; }
+.cta-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 28px; margin: 18px 0 26px; padding: 20px 22px; border: 1px solid var(--axis); border-radius: 12px; background: var(--surface); }
+.cta-card > div { flex: 1 1 320px; }
+.cta-card h3 { font-family: var(--serif); font-size: 1.2rem; margin: 0 0 4px; }
+.cta-card p { margin: 0; color: var(--ink-2); }
+@media (max-width: 640px) {
+  .top-in { gap: 10px; }
+  .menu:not([hidden]) { display: inline-grid; place-items: center; }
+  .nav.is-open { display: flex; flex-direction: column; gap: 0; position: absolute; left: 0; right: 0; top: 100%; z-index: 20; padding: 6px 16px 12px; background: var(--page); border-bottom: 1px solid var(--hair); }
+  .nav.is-open a { padding: 12px 0; font-size: 1rem; border-top: 1px solid var(--hair); }
+  .nav.is-open a:first-child { border-top: 0; }
+}

@@ -169,6 +169,28 @@ class ProfilePage(unittest.TestCase):
         self.assertRegex(html, r'name="quiet_from">.*<option value="22" selected>10 PM</option>')
         self.assertRegex(html, r'name="quiet_to">.*<option value="4" selected>4 AM</option>')
 
+    def test_every_page_has_a_my_alerts_button_that_is_not_in_the_hidden_menu(self):
+        # The menu links are hidden on a phone, so the button has to sit outside them.
+        for prefix, href in (("", "./profile/"), ("../", "../profile/"), ("../../", "../../profile/")):
+            header = render._header(prefix)
+            self.assertIn('class="top-cta" href="%s"' % href, header)
+            nav = header[header.index('<nav'):header.index('</nav>')]
+            self.assertNotIn("profile/", nav)
+        self.assertIn("data-menu", render._header(""))
+
+    def test_the_home_page_and_break_pages_point_to_it(self):
+        import inspect
+        self.assertIn('href="profile/"', inspect.getsource(render.index_page))
+        self.assertIn('href="../../profile/"', inspect.getsource(render.spot_page))
+
+    def test_the_phone_menu_script_and_styles_exist(self):
+        with open(os.path.join(ROOT, "sitegen", "assets", "site.js")) as f:
+            self.assertIn("data-menu", f.read())
+        with open(os.path.join(ROOT, "sitegen", "assets", "style.css")) as f:
+            css = f.read()
+        self.assertIn(".nav.is-open", css)
+        self.assertIn(".top-cta", css)
+
     def test_the_script_never_uses_innerhtml(self):
         with open(PROFILE_JS) as f:
             self.assertIsNone(re.search(r"innerHTML|outerHTML|document\.write", f.read()))

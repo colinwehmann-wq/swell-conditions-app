@@ -42,7 +42,12 @@
 
   function validMode(m) { return m === 'satellite' || m === 'map' ? m : 'satellite'; }
 
-  var api = { FAR_ZOOM: FAR_ZOOM, NATIVE_ZOOM: NATIVE_ZOOM, SATELLITE_MIN_ZOOM: SATELLITE_MIN_ZOOM, GLYPH: GLYPH, CHIP: CHIP, TILES: TILES, slugFromHash: slugFromHash,
+  /* The label that appears when you hover or focus a pin: the break and how it rates, before you click. */
+  function tipParts(p) {
+    return { name: p.name, glyph: GLYPH[p.band] || '', rating: Number(p.rating).toFixed(1), label: p.label };
+  }
+
+  var api = { tipParts: tipParts, FAR_ZOOM: FAR_ZOOM, NATIVE_ZOOM: NATIVE_ZOOM, SATELLITE_MIN_ZOOM: SATELLITE_MIN_ZOOM, GLYPH: GLYPH, CHIP: CHIP, TILES: TILES, slugFromHash: slugFromHash,
               isFar: isFar, pinLabel: pinLabel, validMode: validMode };
 
   // ---------------------------------------------------------------------------- the page
@@ -114,10 +119,26 @@
     pin.appendChild(span('pin-ico', GLYPH[p.band] || ''));
     pin.appendChild(span('pin-num', Number(p.rating).toFixed(1)));
     var icon = L.divIcon({ html: pin, className: 'pin-wrap', iconSize: [62, 30], iconAnchor: [31, 15] });
-    var m = L.marker([p.lat, p.lon], { icon: icon, title: pinLabel(p), alt: pinLabel(p), keyboard: true, riseOnHover: true,
-                                       zIndexOffset: Math.round(p.rating * 100) });
+    var m = L.marker([p.lat, p.lon], { icon: icon, keyboard: true, riseOnHover: true, zIndexOffset: Math.round(p.rating * 100) });
     m.on('click', function () { select(p.slug, true); });
     m.addTo(map);
+
+    // The label on hover (and on keyboard focus). It replaces the browser's own delayed tooltip.
+    var t = tipParts(p);
+    var tip = document.createElement('span');
+    tip.className = 'tip-in';
+    var name = document.createElement('strong');
+    name.textContent = t.name;
+    var rate = span('tip-rate tip-' + p.band, t.glyph + ' ' + t.rating + ' · ' + t.label);
+    tip.appendChild(name);
+    tip.appendChild(rate);
+    m.bindTooltip(tip, { direction: 'top', offset: [0, -14], opacity: 1, className: 'pin-tip' });
+    var el = m.getElement();
+    if (el) {
+      el.setAttribute('aria-label', pinLabel(p));
+      el.addEventListener('focus', function () { m.openTooltip(); });
+      el.addEventListener('blur', function () { m.closeTooltip(); });
+    }
     markers[p.slug] = { marker: m, pin: pin, point: p };
   });
 

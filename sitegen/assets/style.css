@@ -420,3 +420,60 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
   .rv { opacity: 1; transform: none; transition: none; }
 }
 @media print { .rv { opacity: 1 !important; transform: none !important; } .curtain { position: relative; } .sheet { box-shadow: none; margin-top: 0; } }
+
+/* ---- map page ---- */
+.map-page { position: relative; }
+.map-wrap { position: relative; height: calc(100vh - var(--head)); height: calc(100dvh - var(--head)); min-height: 460px; overflow: hidden; }
+.map { position: absolute; inset: 0; background: #7fa3b8; font-family: var(--sans); }   /* the ocean colour of the tiles, so a tile still loading blends in */
+.leaflet-container { font-family: var(--sans); }
+.map-title, .map-legend, .map-card { position: absolute; z-index: 600; background: var(--surface); border: 1px solid var(--axis); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); color: var(--ink); }
+.map-title { top: 12px; left: 12px; padding: 8px 14px; border-radius: 12px; }
+.map-title h1 { font-size: 1.15rem; margin: 0; }
+.map-title p { margin: 0; font-size: 0.8rem; color: var(--ink-2); }
+.map-legend { left: 12px; bottom: 28px; margin: 0; padding: 8px 12px; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--ink-2); }
+.map-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.map-noscript { position: absolute; z-index: 600; inset: 80px 12px auto; padding: 12px; background: var(--surface); border: 1px solid var(--axis); border-radius: 12px; }
+
+/* pins: a rating on its colour, with the same icon the chips use, so colour is never alone */
+.pin-wrap { display: flex; align-items: center; justify-content: center; background: none; border: 0; }
+.pin { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px 0 8px; border-radius: 999px; border: 2px solid #fff; color: #fff; font: 700 0.8rem/1 var(--sans); letter-spacing: 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; white-space: nowrap; }
+.pin-green { background: var(--good); }
+.pin-yellow { background: var(--warn); color: #0b0b0b; }
+.pin-orange { background: var(--serious); color: #0b0b0b; }
+.pin-red { background: var(--bad); }
+.pin-ico { font-size: 0.72rem; }
+.pin-num { font-variant-numeric: tabular-nums; }
+.pin-wrap:hover .pin, .pin.is-on { transform: scale(1.18); box-shadow: 0 0 0 3px rgba(37, 106, 191, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45); }
+.pin-wrap:focus-visible .pin { outline: 3px solid var(--link); outline-offset: 2px; }
+.pin-key { height: 18px; padding: 0 5px; border-width: 1px; box-shadow: none; cursor: default; }
+.map-far .pin-wrap .pin { width: 16px; height: 16px; padding: 0; justify-content: center; border-width: 2px; }
+.map-far .pin-wrap .pin .pin-num, .map-far .pin-wrap .pin .pin-ico { display: none; }
+.map-far .pin-wrap:hover .pin, .map-far .pin.is-on { transform: scale(1.5); }
+
+.map-card { left: 12px; bottom: 28px; width: min(360px, calc(100% - 24px)); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; }
+.map-card[hidden] { display: none; }
+.map-legend { transition: opacity 0.2s ease; }
+.has-card .map-legend { opacity: 0; pointer-events: none; }
+.map-card-photo { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; }
+.map-card-photo[hidden] { display: none; }
+.map-card:has(.map-card-photo[hidden]) { grid-template-columns: 1fr; }
+.map-card-body h2 { font-family: var(--serif); font-size: 1.25rem; margin: 0; padding-right: 28px; }
+.map-card-body p { margin: 2px 0 0; font-size: 0.88rem; }
+.map-card-body .chip { margin: 8px 0 4px; }
+.map-card-cond { color: var(--ink); }
+.map-card-body .btn { margin-top: 10px; min-height: 38px; }
+.map-card-x { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-2); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.map-card-x:hover { background: var(--wash); color: var(--ink); }
+.map-list summary { cursor: pointer; font-family: var(--serif); font-size: 1.15rem; padding: 6px 0; }
+.map-list ul { columns: 2 220px; column-gap: 32px; margin: 12px 0 0; padding: 0; }
+.map-list li { padding: 4px 0; break-inside: avoid; }
+@media (max-width: 760px) {
+  .map-card { left: 8px; right: 8px; bottom: 26px; width: auto; }
+  .map-legend { bottom: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .pin, .map-legend { transition: none; } }
+.map-mode { position: absolute; z-index: 600; top: 12px; right: 58px; display: flex; padding: 3px; border-radius: 12px; background: var(--surface); border: 1px solid var(--axis); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); }
+.map-mode button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-2); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.map-mode button[aria-pressed="true"] { background: var(--btn); color: #fff; }
+.map-title { max-width: calc(100% - 24px); }
+@media (max-width: 560px) { .map-title p { display: none; } .map-mode { top: 58px; left: 12px; right: auto; } }

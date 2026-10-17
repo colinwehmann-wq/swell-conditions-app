@@ -1,0 +1,13 @@
+Leaflet 1.9.4 (https://leafletjs.com), BSD 2-Clause licence (see LICENSE in this folder).
+
+Files are the unmodified originals from the npm package, fetched from
+  https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
+  https://unpkg.com/leaflet@1.9.4/dist/leaflet.css
+  https://unpkg.com/leaflet@1.9.4/LICENSE
+
+SHA-256 (base64), matching the values Leaflet publishes for 1.9.4:
+  leaflet.js   20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=
+  leaflet.css  p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=
+
+tests/test_map.py checks these hashes, so an accidental edit fails the suite. Leaflet's marker and
+layer-control images are not included: the map draws its own pins and has no layer control.

@@ -155,7 +155,7 @@ def _header(prefix):
         '<header class="top"><div class="wrap top-in">'
         '<a class="brand" href="%(p)s"><span class="brand-mark" aria-hidden="true">≈</span>Swell Check</a>'
         '<nav class="nav" id="nav" aria-label="Primary">'
-        '<a href="%(p)s#now">Now</a><a href="%(p)sbreaks/">All breaks</a><a href="%(p)s#week">Week</a>'
+        '<a href="%(p)s#now">Now</a><a href="%(p)smap/">Map</a><a href="%(p)sbreaks/">All breaks</a><a href="%(p)s#week">Week</a>'
         '<a href="%(p)s#alerts">Alerts</a><a href="%(p)s#how">How it works</a></nav>'
         '<a class="top-cta" href="%(p)sprofile/">My alerts</a>'
         '<button class="menu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav" data-menu hidden>'
@@ -172,7 +172,9 @@ def _footer(payload):
         '<footer class="foot"><div class="wrap">'
         '<div class="foot-grid">'
         '<div><h2 class="foot-h">Data</h2><ul class="plain">'
-        '<li>%s</li><li>%s</li><li>%s</li></ul></div>'
+        '<li>%s</li><li>%s</li><li>%s</li>'
+        '<li>Maps: imagery and map data from <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" '
+        'rel="noopener">USGS The National Map</a>, drawn with <a href="https://leafletjs.com" rel="noopener">Leaflet</a></li></ul></div>'
         '<div><h2 class="foot-h">About</h2>'
         '<p>An open-source project. The scoring, the tests and the roadmap are all in the '
         '<a href="%s">repository</a>. The raw numbers behind every page are in '
@@ -211,7 +213,7 @@ def _og_image(payload, slug):
     return '<meta property="og:image" content="%s"><meta name="twitter:card" content="summary_large_image">' % esc(url)
 
 
-def _shell(title, description, body, prefix, payload, extra_class="", og_slug=None, scripts=()):
+def _shell(title, description, body, prefix, payload, extra_class="", og_slug=None, scripts=(), styles=()):
     return (
         '<!doctype html><html lang="en"><head>'
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -221,13 +223,13 @@ def _shell(title, description, body, prefix, payload, extra_class="", og_slug=No
         '<meta property="og:title" content="%s"><meta property="og:description" content="%s">'
         '<meta property="og:type" content="website">%s'
         '<link rel="icon" href="%s">%s'
-        '<link rel="stylesheet" href="%sassets/style.css"></head>'
+        '%s<link rel="stylesheet" href="%sassets/style.css"></head>'
         '<body class="%s"><a class="skip" href="#main">Skip to content</a>%s'
         '<main id="main">%s</main>%s'
         '<div id="tip" class="tip" role="tooltip" hidden></div>'
         '%s<script src="%sassets/site.js" defer></script></body></html>'
         % (esc(title), esc(description), esc(title), esc(description), _og_image(payload, og_slug), _FAVICON, _THEME_BOOT,
-           prefix, esc(extra_class), _header(prefix), body, _footer(payload),
+           "".join('<link rel="stylesheet" href="%sassets/%s">' % (prefix, esc(s)) for s in styles), prefix, esc(extra_class), _header(prefix), body, _footer(payload),
            "".join('<script src="%sassets/%s" defer></script>' % (prefix, esc(s)) for s in scripts), prefix)
     )
 
@@ -450,6 +452,7 @@ def index_page(payload):
     count = _NUMBER_WORDS.get(len(top), str(len(top)))
     finder = (
         '<section class="finder-sec"><div class="wrap">%s'
+        '<p class="finder-alt"><a href="map/">See every break on the map →</a></p>'
         '<p class="finder-alt"><a href="breaks/">Browse all %d breaks, Oceanside to the border →</a></p>'
         '<p class="finder-alt"><a href="profile/">Get alerts for the conditions you like →</a></p>'
         '</div></section>'
@@ -566,6 +569,56 @@ def _dir_options():
         '<option value="%s">%s</option>' % (("%g" % (i * 22.5)), name) for i, name in enumerate(_COMPASS_16))
 
 
+def _map_points(payload):
+    """What the map needs for each break: where it is, how it rates, and what to say about it."""
+    out = []
+    for s in payload["spots"]:
+        p = media.photo(s["slug"])
+        out.append({
+            "slug": s["slug"], "name": s["name"], "place": _place(s), "lat": s["lat"], "lon": s["lon"],
+            "rating": s["rating"], "band": s["band"], "label": s["label"],
+            "cond": cond_line(s["now"]), "when": window_text(s),
+            "href": "../spots/%s/" % s["slug"],
+            "thumb": ("../assets/img/%s" % media.tile(p)[0]) if p else None,
+        })
+    return out
+
+
+def map_page(payload):
+    """A map of every break; tap a pin for its card. Leaflet draws it (assets/vendor/leaflet, assets/map.js)."""
+    points = _map_points(payload)
+    legend = "".join('<li><span class="pin pin-%s pin-key" aria-hidden="true"><span class="pin-ico">%s</span></span> %s</li>'
+                     % (band, ico, esc(text)) for band, ico, text in (
+                         ("green", "✓", "7 and up"), ("yellow", "!", "5 to 7"), ("orange", "▼", "3 to 5"), ("red", "✕", "under 3")))
+    names = "".join('<li><a href="../spots/%s/">%s</a> <span class="muted">%s</span></li>'
+                    % (esc(p["slug"]), esc(p["name"]), esc(p["place"])) for p in points)
+    body = (
+        '<section class="map-page"><div class="map-wrap" data-map-root>'
+        '<div id="map" class="map" role="region" aria-label="Map of surf breaks in San Diego County"></div>'
+        '<div class="map-title"><h1>Surf map</h1><p>%d breaks. Tap one for its conditions.</p></div>'
+        '<div class="map-mode" role="group" aria-label="Map style">'
+        '<button type="button" data-mode="satellite" aria-pressed="true">Satellite</button>'
+        '<button type="button" data-mode="map" aria-pressed="false">Map</button></div>'
+        '<ul class="map-legend plain" aria-label="Rating key">%s</ul>'
+        '<aside class="map-card" data-card hidden aria-live="polite">'
+        '<button class="map-card-x" type="button" data-card-close aria-label="Close">×</button>'
+        '<img class="map-card-photo" data-card-photo alt="" width="160" height="107" hidden>'
+        '<div class="map-card-body"><h2 data-card-name></h2><p class="muted" data-card-place></p>'
+        '<span class="chip chip-pill" data-card-chip></span>'
+        '<p class="map-card-cond" data-card-cond></p><p class="muted" data-card-when></p>'
+        '<a class="btn btn-primary" data-card-link href="#">Open</a></div></aside>'
+        '<noscript><p class="map-noscript">The map needs JavaScript. The list below works without it.</p></noscript>'
+        '</div><script type="application/json" id="map-data">%s</script></section>'
+        '<section class="sec"><div class="wrap"><details class="map-list"><summary>All %d breaks as a list</summary>'
+        '<ul class="plain">%s</ul></details></div></section>'
+        % (len(points), legend, _json_for_script(points), len(points), names)
+    )
+    return _shell("Surf map — Swell Check",
+                  "Every surf break in San Diego County on a satellite map, with live ratings. Tap one for its conditions.",
+                  body, "../", payload, "map", scripts=("vendor/leaflet/leaflet.js", "map.js"),
+                  styles=("vendor/leaflet/leaflet.css",))
+
+
 def profile_page(payload):
     """Pick breaks and ideal conditions; the script (assets/profile.js) saves them to the profile service."""
     groups = {}
@@ -668,11 +721,11 @@ def spot_page(spot, payload):
                 if buoy else "No buoy reading right now — showing the forecast model.")
     bg, credit = _hero_bg(spot["slug"], "../../", decorative=False)
     hero = (
-        '<section class="spot-hero%s">%s<div class="wrap"><p class="crumb"><a href="../../">← San Diego County</a> · <a href="../../breaks/">All breaks</a></p>'
+        '<section class="spot-hero%s">%s<div class="wrap"><p class="crumb"><a href="../../">← San Diego County</a> · <a href="../../breaks/">All breaks</a> · <a href="../../map/#%s">On the map</a></p>'
         '<div class="spot-hero-in"><div><p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s</p></div>'
         '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div>%s</section>'
-        % (" has-photo curtain" if bg else "", bg, esc(_place(spot)), esc(spot["name"]), esc(spot["notes"]),
+        % (" has-photo curtain" if bg else "", bg, esc(spot["slug"]), esc(_place(spot)), esc(spot["name"]), esc(spot["notes"]),
            esc(payload["generated"]), esc(payload["generated_label"]),
            esc(buoy_txt), spot["rating"], chip(spot["rating"], spot["band"], spot["label"], "chip-pill"), credit)
     )

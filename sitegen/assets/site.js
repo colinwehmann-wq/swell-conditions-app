@@ -323,4 +323,38 @@
       document.addEventListener('click', function (e) { if (!finder.contains(e.target)) close(); });
     }
   }
+
+  /* ---- scroll: the photo hero dims and drifts as the page slides up over it, and sections ease in ----
+     Both are decoration. They are skipped for anyone who asked for less motion, and nothing here
+     changes what is on the page: without this script the page just scrolls normally. */
+  var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var sheet = document.querySelector('.sheet');
+  if (!calm && sheet) {
+    var curtain = document.querySelector('.curtain');
+    // Sections below the fold wait to ease in. Checked on every scroll frame rather than with an
+    // observer, because an observer never fires for a section someone jumped straight past.
+    var waiting = Array.prototype.filter.call(sheet.children, function (el) {
+      return /\b(sec|finder-sec)\b/.test(el.className) && el.getBoundingClientRect().top > (window.innerHeight || 800) * 0.9;
+    });
+    waiting.forEach(function (el) { el.classList.add('rv'); });
+
+    var queued = false;
+    var frame = function () {
+      queued = false;
+      if (curtain) {
+        var h = curtain.offsetHeight || 1;
+        var p = Math.min(1, Math.max(0, (window.pageYOffset || 0) / (h * 0.85)));
+        curtain.style.setProperty('--p', p.toFixed(3));
+      }
+      var line = (window.innerHeight || 800) * 0.92;
+      waiting = waiting.filter(function (el) {
+        if (el.getBoundingClientRect().top < line) { el.classList.add('in'); return false; }
+        return true;
+      });
+    };
+    var queue = function () { if (!queued) { queued = true; window.requestAnimationFrame(frame); } };
+    window.addEventListener('scroll', queue, { passive: true });
+    window.addEventListener('resize', queue);
+    frame();
+  }
 })();

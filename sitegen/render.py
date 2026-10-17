@@ -188,6 +188,12 @@ def _footer(payload):
     )
 
 
+def _sheet(html):
+    """Everything under a photo hero. The hero stays put behind it and this slides up over the
+    photo (see .curtain / .sheet in style.css); on a page with no photo it is just a wrapper."""
+    return '<div class="sheet">%s</div>' % html
+
+
 def _json_for_script(obj):
     """JSON safe to place inside a <script> element: nothing in it can close the tag or open a comment."""
     text = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
@@ -435,7 +441,7 @@ def index_page(payload):
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · '
         'Live NOAA buoys, tides and a 7-day forecast</p></div>%s</div>%s</section>'
         '<script type="application/json" id="peaks-data">%s</script>'
-        % (" has-photo" if bg else "", esc(h.get("anchor") or ""), bg, esc(h["kicker"]), esc(h["title"]),
+        % (" has-photo curtain" if bg else "", esc(h.get("anchor") or ""), bg, esc(h["kicker"]), esc(h["title"]),
            esc(h["sub"]), esc(payload["generated"]), esc(payload["generated_label"]), figure, credit,
            _json_for_script(payload.get("peaks", [])))
     )
@@ -503,7 +509,7 @@ def index_page(payload):
     )
     return _shell("Swell Check — surf conditions for San Diego County",
                   "Live surf conditions, a 7-day outlook and opt-in alerts for %d breaks from Oceanside to the border." % total,
-                  hero + finder + now_sec + week + boards + alerts + how, "", payload, "home", media.HERO_SLUG,
+                  hero + _sheet(finder + now_sec + week + boards + alerts + how), "", payload, "home", media.HERO_SLUG,
                   scripts=("peaks.js", "search.js"))
 
 
@@ -666,7 +672,7 @@ def spot_page(spot, payload):
         '<div class="spot-hero-in"><div><p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
         '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s</p></div>'
         '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div>%s</section>'
-        % (" has-photo" if bg else "", bg, esc(_place(spot)), esc(spot["name"]), esc(spot["notes"]),
+        % (" has-photo curtain" if bg else "", bg, esc(_place(spot)), esc(spot["name"]), esc(spot["notes"]),
            esc(payload["generated"]), esc(payload["generated_label"]),
            esc(buoy_txt), spot["rating"], chip(spot["rating"], spot["band"], spot["label"], "chip-pill"), credit)
     )
@@ -725,7 +731,7 @@ def spot_page(spot, payload):
         '<a href="%s" rel="noopener">ntfy</a> app (<a href="%s" rel="noopener">Android</a>) — no account.</p>%s'
         '<p class="note">ntfy channels are public: anyone who knows the name can read or post to it.</p></div></section>'
         % (esc(spot["name"]), esc(spot["name"]), _IOS, _ANDROID, subscribe_buttons(spot["name"], spot["ntfy"])))
-    body = hero + now_sec + today + week + bring + likes + alerts
+    body = hero + _sheet(now_sec + today + week + bring + likes + alerts)
     return _shell("%s — Swell Check" % spot["name"],
                   "Live conditions, today's best window and a 7-day outlook for %s, %s." % (spot["name"], spot["area"]),
                   body, "../../", payload, "spot", spot["slug"])

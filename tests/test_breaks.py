@@ -184,7 +184,7 @@ class Photos(unittest.TestCase):
         spot = dict(next(s for s in p["spots"] if s["slug"] == "swamis"), slug=self.NONE)
         page = render.spot_page(spot, p)
         self.assertIn("hero-bg hero-bg-plain", page)
-        self.assertIn('class="spot-hero has-photo"', page)
+        self.assertIn('class="spot-hero has-photo curtain"', page)
         self.assertNotIn('class="photo-credit"', page.split("</section>")[0])
 
     def test_the_footer_credits_every_photo_on_the_page(self):

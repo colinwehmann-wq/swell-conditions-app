@@ -53,6 +53,31 @@ are refused. The address is only ever stored as a one-way hash for that hourly c
    secret. Name it `PROFILES_ADMIN_KEY` and paste (the key is still on your clipboard).
 6. Check it is up: open `https://swell-profiles.<your-name>.workers.dev/api/health`. You should see `{"ok":true}`.
 
+## Waking the alert job (so alerts arrive on time)
+
+GitHub's own hourly schedule is best effort: on a quiet repository it can run only every few hours, which is far too
+late for "an hour before the peak". So the Worker wakes the alert job itself, every 30 minutes between 4 AM and 7 PM
+Pacific and only when someone has a profile, by asking GitHub to run the workflow
+([`src/dispatch.js`](src/dispatch.js)). GitHub's schedule stays on as a backup.
+
+It needs one more secret, a GitHub token that can do nothing except run Actions on this one repository:
+
+1. Open <https://github.com/settings/personal-access-tokens/new> (a *fine-grained* token).
+2. Name it `swell-alerts-wakeup`, expiry **1 year**, repository access **Only select repositories** and pick
+   `swell-conditions-app`.
+3. Under **Repository permissions**, set **Actions** to **Read and write**. Leave everything else alone. Generate the
+   token and keep the page open; it is shown once.
+4. In Terminal, store it in Cloudflare (paste when asked) and redeploy so the schedule is registered:
+
+   ```bash
+   cd "Swell Conditions App/worker"
+   npx wrangler secret put GITHUB_DISPATCH_TOKEN
+   npx wrangler deploy
+   ```
+
+Check it: `/api/health` shows `dispatch` with the time and result of the last wake-up (`"ok": true, "status": 204` once it
+works; a `401` means the token is wrong or expired). The token expires after a year; make a new one the same way.
+
 ## Running the tests
 
 ```bash

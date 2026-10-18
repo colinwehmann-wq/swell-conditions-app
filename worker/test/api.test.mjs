@@ -57,7 +57,7 @@ async function create(env, body = PROFILE, opts = {}) {
 test("health", async () => {
   const res = await call(makeEnv(), "GET", "/api/health");
   assert.equal(res.status, 200);
-  assert.deepEqual(await json(res), { ok: true });
+  assert.deepEqual(await json(res), { ok: true, dispatch: null });
 });
 
 test("create returns a secret id and a private topic", async () => {

@@ -6,6 +6,10 @@ name: profile alerts
 #
 # Needs the repository secret PROFILES_ADMIN_KEY (the same key stored in the Worker as ADMIN_KEY).
 # Without it the job does nothing and says so.
+#
+# The schedule below is only a backup. GitHub runs a quiet repository's cron every few hours at best,
+# so the profile service's Worker wakes this workflow itself every 30 minutes (worker/src/dispatch.js)
+# by calling workflow_dispatch with dry_run=false.
 
 on:
   schedule:

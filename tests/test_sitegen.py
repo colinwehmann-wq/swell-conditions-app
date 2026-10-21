@@ -176,6 +176,10 @@ class Photos(unittest.TestCase):
             self.assertTrue(p["licence"][1].startswith("https://creativecommons.org/"))
             self.assertIn(p["licence"][0], media.credit_text(p))
 
+    def test_every_break_has_a_photo(self):
+        missing = [cfg["slug"] for cfg in config.SPOTS if not media.photo(cfg["slug"])]
+        self.assertEqual(missing, [])
+
     def test_the_original_five_still_have_photos(self):
         for slug in ("swamis", "grandview", "beacons", "blacks", "oceanside"):
             self.assertIsNotNone(media.photo(slug), slug)

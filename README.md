@@ -220,8 +220,8 @@ A static site, rebuilt on every scheduled run and deployed to GitHub Pages:
   collisions, and the workflow only publishes to them from scheduled runs.
 - **Open data** — the same numbers are published as `data/latest.json`.
 - **Photos** — a full-bleed photo behind the home hero and each break's page, and a thumbnail
-  beside every break name (a small 480 px copy, so the tiles stay light). 25 of the 28 breaks have
-  one; the other three (Bird Rock, Buccaneer Beach and Pipes) show a plain tile until a free-licensed photo turns up. They're Creative Commons images from Wikimedia Commons; the file,
+  beside every break name (a small 480 px copy, so the tiles stay light). Every break has
+  one. They're Creative Commons images from Wikimedia Commons; the file,
   crop point and licence for each live in [`sitegen/media.py`](sitegen/media.py), the credits are
   printed on the page and in the footer, and a test fails if a spot is missing a photo or a credit.
   Images are resized to web weight (under ~500 KB each) and the slow zoom stops for visitors who

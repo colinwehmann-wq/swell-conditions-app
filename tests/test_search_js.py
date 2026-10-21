@@ -57,6 +57,7 @@ class Search(unittest.TestCase):
             "sloughs": "Tijuana Sloughs", "border": "Tijuana Sloughs", "hotel del": "Coronado",
             "cardiff": "Cardiff Reef", "seaside": "Cardiff Reef", "fletchers": "Fletcher Cove",
             "tabletops": "Fletcher Cove", "beacons": "Beacon's", "grandview": "Grandview",
+            "pipes": "Pipes", "san elijo": "Pipes", "campgrounds": "Pipes",
         }
         got = {q: self.first(q) for q in cases}
         self.assertEqual(got, cases)

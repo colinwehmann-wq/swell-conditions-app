@@ -13,7 +13,7 @@
   98,
   99.5
  ],
- "generated": "2026-10-16",
+ "generated": "2026-10-20",
  "breaks": {
   "swamis": {
    "signature": "59f91f780dd4",
@@ -599,6 +599,55 @@
      "swell_dir_deg": 270,
      "wind_kn": 5,
      "tide_ft": 3.2,
+     "hour": 7
+    }
+   }
+  },
+  "pipes": {
+   "signature": "7071d4ef0f23",
+   "anchors": [
+    24.471,
+    51.587,
+    54.023,
+    56.755,
+    62.185,
+    76.904,
+    83.053,
+    86.398,
+    89.639,
+    92.767
+   ],
+   "history": {
+    "first": "2012-01-01",
+    "last": "2025-10-14",
+    "days": 4933,
+    "buoy": "46225"
+   },
+   "days_per_year": {
+    "5": 127.9,
+    "6": 73.1,
+    "7": 36.6,
+    "8": 18.3,
+    "9": 7.3,
+    "10": 1.9
+   },
+   "typical": {
+    "7": {
+     "days": 494,
+     "size_ft": 3.6,
+     "period_s": 15.4,
+     "swell_dir_deg": 254,
+     "wind_kn": 4,
+     "tide_ft": 2.5,
+     "hour": 8
+    },
+    "9": {
+     "days": 99,
+     "size_ft": 3.8,
+     "period_s": 15.4,
+     "swell_dir_deg": 261,
+     "wind_kn": 4,
+     "tide_ft": 2.5,
      "hour": 7
     }
    }

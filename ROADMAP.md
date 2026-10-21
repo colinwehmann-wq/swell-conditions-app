@@ -41,7 +41,7 @@ formatters + state I/O).
 - [x] **Public website.** Static site on GitHub Pages, rebuilt by the same workflow
   that checks conditions: ranked live conditions, hour-by-hour chart, 7-day matrix,
   board recommender, and opt-in alerts via public per-spot ntfy topics.
-- [x] **The whole county.** 27 breaks from Oceanside to the border, a searchable directory, and a
+- [x] **The whole county.** 28 breaks from Oceanside to the border, a searchable directory, and a
   home page that shows the county's best five. Only the original five reach the owner's phone.
   - [x] Photos for the new breaks (20 free-licensed Commons photos). Bird Rock and Buccaneer Beach
     still show a plain tile: nothing usable turned up. Mission Beach's is the Giant Dipper, not surf.

@@ -225,13 +225,69 @@ class State(unittest.TestCase):
         self.assertEqual(list(state["t1"]), ["swamis"])
 
 
+class Digest(unittest.TestCase):
+    """One message for everything due for a person."""
+    CFG2 = {"name": "Windansea", "offshore_dir_deg": [40, 110]}
+
+    def item(self, cfg, score, hour=8, **cond):
+        rows = [row(hour - 1, score=score - 5), row(hour, score=score, **cond), row(hour + 1, score=score - 5)]
+        return cfg, P.windows(rows, PREFS, cfg)[0]
+
+    def test_a_single_break_gets_the_full_message(self):
+        item = self.item(CFG, 84.0)
+        self.assertEqual(P.digest([item], at(7, 5)), P.message("Swami's", item[1], CFG, at(7, 5)))
+
+    def test_several_breaks_become_one_message_best_first(self):
+        a, b = self.item(CFG, 74.0), self.item(self.CFG2, 91.0, hour=9)
+        title, body = P.digest([a, b], at(7, 30), site_url="https://example.test/site/")
+        self.assertEqual(title, "2 of your breaks are lining up")
+        self.assertLess(body.index("1. Windansea"), body.index("2. Swami's"))
+        self.assertIn("Epic 9.1/10", body)
+        self.assertIn("Good 7.4/10", body)
+        self.assertIn("4.0 ft at 14 s", body)
+        self.assertIn("https://example.test/site/profile/", body)
+
+    def test_each_line_has_the_peak_time_and_the_window(self):
+        _, body = P.digest([self.item(CFG, 80.0), self.item(self.CFG2, 70.0)], at(7, 5))
+        self.assertIn("best around 8:00 AM", body)
+        self.assertIn("lined up 7 AM to 10 AM", body)
+
+    def test_a_long_list_is_trimmed(self):
+        items = [self.item(dict(CFG, name="B%d" % i), 60.0 + i) for i in range(P.MAX_LISTED + 3)]
+        title, body = P.digest(items, at(7, 5))
+        self.assertEqual(title, "%d of your breaks are lining up" % len(items))
+        self.assertIn("+3 more", body)
+        self.assertEqual(body.count("ft at"), P.MAX_LISTED)
+
+    def test_title_is_plain_ascii_for_a_header(self):
+        title, _ = P.digest([self.item(CFG, 80.0), self.item(self.CFG2, 70.0)], at(7, 5))
+        title.encode("ascii")
+
+
+class WhenPhrase(unittest.TestCase):
+    def window(self):
+        return P.windows([row(6), row(7), row(8, score=80), row(9), row(10)], PREFS, CFG)[0]       # 6-11, peak 8
+
+    def test_before_the_peak(self):
+        self.assertEqual(P.when_phrase(self.window(), at(7, 5)), "best around 8:00 AM (in about 55 minutes), lined up 6 AM to 11 AM")
+
+    def test_around_the_peak(self):
+        for now in (at(7, 52), at(8, 0), at(8, 9)):
+            self.assertEqual(P.when_phrase(self.window(), now), "peaking now, lined up 6 AM to 11 AM")
+
+    def test_after_the_peak_it_says_so_instead_of_pretending_it_is_now(self):
+        self.assertEqual(P.when_phrase(self.window(), at(10, 5)), "on now until 11 AM (best was around 8:00 AM)")
+
+    def test_hours_away(self):
+        self.assertIn("in about 3 hours", P.when_phrase(self.window(), at(5, 0)))
+
+
 class Message(unittest.TestCase):
     def test_title_and_body(self):
         w = P.windows([row(7), row(8, score=84), row(9), row(10)], PREFS, CFG)[0]
         title, body = P.message("Swami's", w, CFG, at(7, 5), site_url="https://example.test/site/")
         self.assertEqual(title, "Swami's: your conditions peak at 8 AM")
-        self.assertIn("7 AM to 11 AM", body)
-        self.assertIn("Best around 8:00 AM (in about 55 minutes)", body)
+        self.assertIn("best around 8:00 AM (in about 55 minutes), lined up 7 AM to 11 AM", body)
         self.assertIn("4.0 ft at 14 s", body)
         self.assertIn("8.4/10", body)
         self.assertIn("https://example.test/site/profile/", body)
@@ -239,7 +295,7 @@ class Message(unittest.TestCase):
     def test_peak_right_now(self):
         w = P.windows([row(8, score=84)], PREFS, CFG)[0]
         _, body = P.message("Swami's", w, CFG, at(8, 4))
-        self.assertIn("right about now", body)
+        self.assertIn("peaking now", body)
 
     def test_no_link_without_a_site_url(self):
         w = P.windows([row(8)], PREFS, CFG)[0]

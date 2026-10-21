@@ -27,7 +27,6 @@ from sources import evaluate, http, notify, profiles  # noqa: E402
 from sources.timeutil import TZ, now as now_local  # noqa: E402
 
 STATE_PATH = os.path.join(ROOT, ".profile-state.json")
-MAX_PER_RUN = 3          # one person never gets more than this many alerts from a single run
 
 
 def fetch_profiles(api, key):
@@ -74,8 +73,9 @@ def hourly_rows(ctx, cfg, now):
 
 
 def plan(people, cfgs, rows_for, state, now):
-    """The alerts to send now as [(topic, slug, window, cfg)], best-rated first for each person and
-    never more than MAX_PER_RUN each. `rows_for(cfg)` supplies the hourly rows."""
+    """The alerts to send now: one entry per person, [(topic, [(slug, window, cfg), ...])], with that
+    person's breaks best-rated first. Everything due for a person goes in one message, so someone
+    who saved five breaks gets one notification, not five. `rows_for(cfg)` supplies the hourly rows."""
     out = []
     for person in people:
         topic = person.get("topic")
@@ -91,9 +91,10 @@ def plan(people, cfgs, rows_for, state, now):
                 continue
             window = profiles.upcoming(person, slug, cfg, rows_for(cfg), now)
             if window and profiles.should_send((state.get(topic) or {}).get(slug), window, now):
-                due.append((topic, slug, window, cfg))
-        due.sort(key=lambda d: -d[2]["peak"]["score"])
-        out.extend(due[:MAX_PER_RUN])
+                due.append((slug, window, cfg))
+        if due:
+            due.sort(key=lambda d: -d[1]["peak"]["score"])
+            out.append((topic, due))
     return out
 
 
@@ -136,17 +137,18 @@ def run(args):
         todo = []
 
     sent = 0
-    for topic, slug, window, cfg in todo:
-        title, body = profiles.message(cfg["name"], window, cfg, now, site_url=config.SITE_URL)
-        click = "%s/spots/%s/" % (config.SITE_URL.rstrip("/"), slug)
+    for topic, items in todo:
+        title, body = profiles.digest([(cfg, window) for _slug, window, cfg in items], now, site_url=config.SITE_URL)
+        click = "%s/spots/%s/" % (config.SITE_URL.rstrip("/"), items[0][0]) if len(items) == 1 else config.SITE_URL
         if args.dry_run:
             print("\n>>> WOULD SEND (profile ...%s): %s\n%s\n" % (topic[-4:], title, body))
             continue
         if notify.send_to_topic(topic, title, body, click=click):
-            profiles.record(state, topic, slug, window, now)
+            for slug, window, _cfg in items:
+                profiles.record(state, topic, slug, window, now)
             sent += 1
     count = len(todo) if args.dry_run else sent
-    print("%d alert%s %s" % (count, "" if count == 1 else "s", "would be sent" if args.dry_run else "sent"))
+    print("%d message%s %s" % (count, "" if count == 1 else "s", "would be sent" if args.dry_run else "sent"))
 
     if not args.dry_run:
         save_state(args.state, state)

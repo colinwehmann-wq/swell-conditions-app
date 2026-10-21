@@ -12,7 +12,9 @@
 
 export const FIRST_HOUR = 4;       // Pacific, inclusive
 export const LAST_HOUR = 19;       // Pacific, exclusive
-export const META_KEY = "meta:dispatch";
+export const META_KEY = "meta:dispatch";            // the profile alerts job
+export const SITE_META_KEY = "meta:dispatch-site";  // the site rebuild
+export const DIGEST_HOUR = 5;      // the first run of this Pacific hour also sends the daily digest
 
 export function pacificHour(now) {
   const text = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", hourCycle: "h23" }).format(new Date(now));
@@ -23,6 +25,27 @@ export function inSurfHours(hour) {
   return hour >= FIRST_HOUR && hour < LAST_HOUR;
 }
 
+// Ask GitHub to run one workflow now. Returns {ok, status}; never throws.
+async function runWorkflow(env, workflow, inputs, fetchImpl) {
+  try {
+    const res = await fetchImpl(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${workflow}/dispatches`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "swell-profiles-worker",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ref: env.GITHUB_REF || "main", inputs }),
+    });
+    return { ok: res.status === 204, status: res.status };
+  } catch {
+    return { ok: false, status: 0 };                   // could not reach GitHub; the next wake-up tries again
+  }
+}
+
+// The profile alerts job: every 30 minutes in surf hours, when someone has a profile.
 export async function dispatch(env, now = Date.now(), fetchImpl = fetch) {
   const result = { at: new Date(now).toISOString(), ok: false, status: null, skipped: null };
 
@@ -30,33 +53,33 @@ export async function dispatch(env, now = Date.now(), fetchImpl = fetch) {
   else if (!inSurfHours(pacificHour(now))) result.skipped = "outside surf hours";
   else if (!(await env.PROFILES.list({ prefix: "p:", limit: 1 })).keys.length) result.skipped = "no profiles";
 
-  if (!result.skipped) {
-    const repo = env.GITHUB_REPO;
-    const workflow = env.GITHUB_WORKFLOW || "profile-alerts.yml";
-    try {
-      const res = await fetchImpl(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "swell-profiles-worker",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ref: env.GITHUB_REF || "main", inputs: { dry_run: "false" } }),
-      });
-      result.status = res.status;
-      result.ok = res.status === 204;
-    } catch {
-      result.status = 0;                                   // could not reach GitHub; the next wake-up tries again
-    }
-  }
+  if (!result.skipped) Object.assign(result, await runWorkflow(env, env.GITHUB_WORKFLOW || "profile-alerts.yml", { dry_run: "false" }, fetchImpl));
 
   await env.PROFILES.put(META_KEY, JSON.stringify(result));
   return result;
 }
 
-export async function lastDispatch(env) {
-  const stored = await env.PROFILES.get(META_KEY, "json");
+// The site rebuild (live conditions, the owner's alerts and the public channels): once an hour in surf hours,
+// on the :00 wake-up. GitHub's own schedule for it drifts by hours, so a dawn visitor would see last night's numbers.
+// The first run at DIGEST_HOUR also sends the daily digest.
+export async function dispatchSite(env, now = Date.now(), fetchImpl = fetch) {
+  const result = { at: new Date(now).toISOString(), ok: false, status: null, skipped: null };
+  const hour = pacificHour(now);
+
+  if (!env.GITHUB_DISPATCH_TOKEN) result.skipped = "no token configured";
+  else if (!inSurfHours(hour)) result.skipped = "outside surf hours";
+  else if (new Date(now).getUTCMinutes() >= 30) result.skipped = "between hourly runs";
+
+  if (!result.skipped) {
+    const inputs = { publish_public: "true", digest: hour === DIGEST_HOUR ? "true" : "false", force: "false" };
+    Object.assign(result, await runWorkflow(env, env.GITHUB_SITE_WORKFLOW || "surf-check.yml", inputs, fetchImpl));
+  }
+
+  await env.PROFILES.put(SITE_META_KEY, JSON.stringify(result));
+  return result;
+}
+
+export async function lastDispatch(env, key = META_KEY) {
+  const stored = await env.PROFILES.get(key, "json");
   return stored ? { at: stored.at, ok: stored.ok, status: stored.status, skipped: stored.skipped } : null;
 }

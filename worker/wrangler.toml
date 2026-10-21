@@ -20,7 +20,8 @@ CREATE_LIMIT_PER_HOUR = "10"
 
 # Which workflow the 30-minute wake-up runs (see src/dispatch.js).
 GITHUB_REPO = "colinwehmann-wq/swell-conditions-app"
-GITHUB_WORKFLOW = "profile-alerts.yml"
+GITHUB_WORKFLOW = "profile-alerts.yml"        # the personal alerts, every 30 minutes
+GITHUB_SITE_WORKFLOW = "surf-check.yml"       # the site rebuild, hourly
 GITHUB_REF = "main"
 
 # Wake the alert job every 30 minutes. GitHub's own schedule drifts by hours on a quiet repository.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker, { handle } from "../src/index.js";
-import { dispatch, pacificHour, inSurfHours, lastDispatch, META_KEY } from "../src/dispatch.js";
+import { dispatch, dispatchSite, pacificHour, inSurfHours, lastDispatch, META_KEY, SITE_META_KEY } from "../src/dispatch.js";
 
 class FakeKV {
   constructor() {
@@ -28,7 +28,7 @@ const TOKEN = "github_pat_TESTTOKEN";
 const makeEnv = (extra = {}) => {
   const env = {
     PROFILES: new FakeKV(), GITHUB_DISPATCH_TOKEN: TOKEN, GITHUB_REPO: "owner/repo", GITHUB_WORKFLOW: "profile-alerts.yml",
-    GITHUB_REF: "main", ...extra,
+    GITHUB_REF: "main", GITHUB_SITE_WORKFLOW: "surf-check.yml", ...extra,
   };
   env.PROFILES.data.set("p:AAAAAAAAAAAAAAAAAAAAAA", JSON.stringify({ topic: "swell-x", breaks: ["swamis"] }));
   return env;
@@ -166,5 +166,94 @@ test("the cron trigger runs the wake-up through the Worker's scheduled handler",
     globalThis.fetch = realFetch;
   }
   assert.equal(waits.length, 1);
+  assert.equal(f.calls.length, 2);                       // at the top of the hour: the alerts job and the site rebuild
+  assert.deepEqual(f.calls.map((c) => c.url.split("/workflows/")[1]).sort(), ["profile-alerts.yml/dispatches", "surf-check.yml/dispatches"]);
+});
+
+test("on the half hour the scheduled handler runs only the alerts job", async () => {
+  const env = makeEnv();
+  const waits = [];
+  const realFetch = globalThis.fetch;
+  const f = recorder(204);
+  globalThis.fetch = f;
+  try {
+    worker.scheduled({ scheduledTime: at(7, 30) }, env, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.deepEqual(f.calls.map((c) => c.url.split("/workflows/")[1]), ["profile-alerts.yml/dispatches"]);
+});
+
+// ---- the site rebuild ---------------------------------------------------------------------------
+
+test("the site rebuild is asked for on the hour, with public channels on and the digest off", async () => {
+  const env = makeEnv();
+  const f = recorder(204);
+  const r = await dispatchSite(env, at(9), f);
+  assert.equal(r.ok, true);
+  const { url, init } = f.calls[0];
+  assert.equal(url, "https://api.github.com/repos/owner/repo/actions/workflows/surf-check.yml/dispatches");
+  assert.equal(init.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.deepEqual(JSON.parse(init.body), { ref: "main", inputs: { publish_public: "true", digest: "false", force: "false" } });
+});
+
+test("the first run of the 5 AM hour also sends the daily digest, no other hour does", async () => {
+  for (const hour of [4, 5, 6, 12, 18]) {
+    const f = recorder(204);
+    await dispatchSite(makeEnv(), at(hour), f);
+    assert.equal(JSON.parse(f.calls[0].init.body).inputs.digest, hour === 5 ? "true" : "false", String(hour));
+  }
+});
+
+test("the site rebuild runs once an hour, not on the half hour", async () => {
+  const f = recorder();
+  const r = await dispatchSite(makeEnv(), at(9, 30), f);
+  assert.equal(r.skipped, "between hourly runs");
+  assert.equal((await dispatchSite(makeEnv(), at(9, 29), f)).skipped, null);
+  assert.equal((await dispatchSite(makeEnv(), at(9, 31), f)).skipped, "between hourly runs");
+});
+
+test("the site rebuild does not wait for anyone to have a profile", async () => {
+  const env = makeEnv();
+  env.PROFILES.data.clear();
+  const f = recorder(204);
+  assert.equal((await dispatchSite(env, at(9), f)).ok, true);
   assert.equal(f.calls.length, 1);
+});
+
+test("the site rebuild keeps to surf hours and needs a token", async () => {
+  const f = recorder();
+  assert.equal((await dispatchSite(makeEnv(), at(3), f)).skipped, "outside surf hours");
+  assert.equal((await dispatchSite(makeEnv(), at(19), f)).skipped, "outside surf hours");
+  assert.equal((await dispatchSite(makeEnv({ GITHUB_DISPATCH_TOKEN: undefined }), at(9), f)).skipped, "no token configured");
+  assert.equal(f.calls.length, 0);
+});
+
+test("a refusal or an outage on the site rebuild is recorded, not thrown", async () => {
+  assert.equal((await dispatchSite(makeEnv(), at(9), recorder(403))).status, 403);
+  const r = await dispatchSite(makeEnv(), at(9), async () => { throw new Error("down"); });
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 0);
+});
+
+test("health shows both wake-ups, the alerts job and the site rebuild, and neither holds the token", async () => {
+  const env = makeEnv({ ALLOWED_ORIGINS: "" });
+  await dispatch(env, at(9), recorder(204));
+  await dispatchSite(env, at(9), recorder(204));
+  const res = await handle(new Request("https://api.example.test/api/health"), env);
+  const text = await res.text();
+  assert.equal(text.includes(TOKEN), false);
+  const body = JSON.parse(text);
+  assert.equal(body.dispatch.ok, true);
+  assert.equal(body.site.ok, true);
+  assert.equal(body.site.status, 204);
+  assert.equal((await lastDispatch(env, SITE_META_KEY)).skipped, null);
+});
+
+test("the site's own record is not mistaken for a profile", async () => {
+  const env = makeEnv();
+  env.PROFILES.data.clear();
+  await dispatchSite(env, at(9), recorder(204));
+  assert.equal((await dispatch(env, at(9), recorder())).skipped, "no profiles");
 });

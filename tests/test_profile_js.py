@@ -28,6 +28,9 @@ const out = {
   nearest: input.degs.map(d => P.nearestDirection(d)),
   defaults: P.DEFAULTS,
   directions: P.DIRECTIONS.length,
+  presets: Object.keys(P.PRESETS),
+  applied: Object.keys(P.PRESETS).concat(['nonsense']).map(k => P.applyPreset(input.base || {}, k)),
+  presetsBuilt: Object.keys(P.PRESETS).map(k => P.buildProfile(P.applyPreset(input.base || {}, k))),
 };
 process.stdout.write(JSON.stringify(out));
 """
@@ -37,9 +40,10 @@ GOOD = {"breaks": ["swamis"], "height_min": "3", "height_max": "6", "period_min"
         "quiet_on": False, "quiet_from": "22", "quiet_to": "4"}
 
 
-def run(values=(), profiles=(), ids=(), degs=()):
+def run(values=(), profiles=(), ids=(), degs=(), base=None):
     out = subprocess.run([NODE, "-e", RUNNER, PROFILE_JS],
-                         input=json.dumps({"values": list(values), "profiles": list(profiles), "ids": list(ids), "degs": list(degs)}),
+                         input=json.dumps({"values": list(values), "profiles": list(profiles), "ids": list(ids), "degs": list(degs),
+                                           "base": base or GOOD}),
                          capture_output=True, text=True, timeout=60, check=True)
     return json.loads(out.stdout)
 
@@ -125,6 +129,31 @@ class FormLogic(unittest.TestCase):
         got = run(ids=["22Tz2frOYx2WfOC1nmLZkQ", "short", "../../etc/passwd", None, "A" * 23])["ids"]
         self.assertEqual(got, [True, False, False, False, False])
 
+    def test_four_presets_each_make_a_valid_profile(self):
+        r = run()
+        self.assertEqual(r["presets"], ["beginner", "intermediate", "advanced", "longboard"])
+        for built in r["presetsBuilt"]:
+            self.assertIn("profile", built, built)
+
+    def test_a_preset_changes_size_period_and_wind_and_nothing_else(self):
+        r = run(base=dict(GOOD, breaks=["swamis", "windansea"], dir_from="202.5", dir_to="292.5", tide_min="1", tide_max="4",
+                          quiet_on=True, lead_min="120", min_hours="3"))
+        for applied in r["applied"]:
+            self.assertEqual(applied["breaks"], ["swamis", "windansea"])
+            self.assertEqual((applied["dir_from"], applied["dir_to"], applied["tide_min"], applied["tide_max"]), ("202.5", "292.5", "1", "4"))
+            self.assertEqual((applied["lead_min"], applied["min_hours"], applied["quiet_on"]), ("120", "3", True))
+
+    def test_presets_are_ordered_by_ambition(self):
+        a = dict(zip(["beginner", "intermediate", "advanced", "longboard"], run()["applied"]))
+        self.assertLess(float(a["beginner"]["height_max"]), float(a["advanced"]["height_max"]))
+        self.assertLess(float(a["beginner"]["period_min"]), float(a["advanced"]["period_min"]))
+        self.assertEqual(a["advanced"]["wind"], "offshore")
+        self.assertLessEqual(float(a["longboard"]["height_min"]), 2)           # longboarders want small days too
+
+    def test_an_unknown_preset_changes_nothing(self):
+        r = run()
+        self.assertEqual(r["applied"][-1], GOOD)
+
     def test_sixteen_compass_points(self):
         self.assertEqual(run()["directions"], 16)
 
@@ -190,6 +219,14 @@ class ProfilePage(unittest.TestCase):
             css = f.read()
         self.assertIn(".nav.is-open", css)
         self.assertIn(".top-cta", css)
+
+    def test_the_page_offers_presets_and_explains_the_height_numbers_and_what_is_stored(self):
+        html = page()
+        for key in ("beginner", "intermediate", "advanced", "longboard"):
+            self.assertIn('data-preset="%s"' % key, html)
+        self.assertIn("swell height at the offshore buoy", html)
+        self.assertIn("What is stored", html)
+        self.assertIn("No name, email or phone number", html)
 
     def test_the_script_never_uses_innerhtml(self):
         with open(PROFILE_JS) as f:

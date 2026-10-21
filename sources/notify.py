@@ -67,12 +67,33 @@ def send_to_topic(topic, title, body, click=None):
     headers = {"Title": _ascii(title), "Tags": "ocean", "Priority": "high"}
     if click:
         headers["Click"] = click
-    print("\n>>> NOTIFY (profile ...%s): %s\n%s\n" % (topic[-4:], title, body))
+    # This repository is public and so are its Actions logs: say that an alert went out, not what it said.
+    print("\n>>> NOTIFY (profile ...%s): %s" % (topic[-4:], title))
     try:
         http.post("%s/%s" % (server, topic), body=body, headers=headers)
         return True
     except Exception as e:  # noqa: BLE001 - best effort; the next hourly run tries again
         print("  ! ntfy failed (profile ...%s): %s" % (topic[-4:], e))
+        return False
+
+
+def send_private_quiet(title, body, click=None):
+    """To the owner's private phone topic (NTFY_TOPIC) only, and without printing the body anywhere. For things that
+    can hold someone's words or contact details, like feedback, because Actions logs are public. Returns True if
+    ntfy took it, False if it failed or no topic is set."""
+    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if not topic:
+        return False
+    server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    headers = {"Title": _ascii(title), "Tags": "speech_balloon", "Priority": "default"}
+    if click:
+        headers["Click"] = click
+    print("\n>>> NOTIFY (private, body not logged): %s" % title)
+    try:
+        http.post("%s/%s" % (server, topic), body=body, headers=headers)
+        return True
+    except Exception as e:  # noqa: BLE001 - best effort; the next run tries again
+        print("  ! ntfy failed: %s" % e)
         return False
 
 

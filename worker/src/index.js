@@ -19,9 +19,11 @@
 // one write (two with the rate limit), and the hourly alert job is 24 list calls a day.
 
 import { dispatch, dispatchSite, lastDispatch, SITE_META_KEY } from "./dispatch.js";
+import { cleanFeedback, KEEP_SECONDS, PREFIX as FEEDBACK_PREFIX } from "./feedback.js";
 import { clean } from "./validate.js";
 
 const MAX_BODY_BYTES = 8192;
+const MAX_FEEDBACK_BYTES = 4096;
 const PAGE = 100;
 const ID_RE = /^[A-Za-z0-9_-]{22}$/;
 
@@ -75,28 +77,60 @@ async function readJson(request) {
   }
 }
 
-async function tooManyCreates(request, env, now) {
+// True when this address has used up its allowance for `kind` this hour (and counts this attempt if not). Only a
+// one-way hash of the address is ever kept, for the hour.
+async function overLimit(request, env, now, kind, limit) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const hour = Math.floor(now / 3600000);
-  const key = `rl:${hex((await digest(ip)).slice(0, 8))}:${hour}`;
-  const limit = Number(env.CREATE_LIMIT_PER_HOUR) || 10;
+  const key = `rl:${kind}:${hex((await digest(ip)).slice(0, 8))}:${hour}`;
   const used = Number(await env.PROFILES.get(key)) || 0;
   if (used >= limit) return true;
   await env.PROFILES.put(key, String(used + 1), { expirationTtl: 3700 });
   return false;
 }
 
+const tooManyCreates = (request, env, now) => overLimit(request, env, now, "create", Number(env.CREATE_LIMIT_PER_HOUR) || 10);
+
 const view = (id, stored) => {
   const { topic, created, updated, ...profile } = stored;
   return { id, topic, created, updated, profile };
 };
 
-async function adminList(request, env, url) {
+// null when the caller holds the admin key, otherwise the response to send back.
+async function adminDenied(request, env) {
   if (!env.ADMIN_KEY) return reply(request, env, 503, { error: "Admin access is not configured." });
   const auth = request.headers.get("Authorization") || "";
   if (!auth.startsWith("Bearer ") || !(await safeEqual(auth.slice(7), env.ADMIN_KEY))) {
     return reply(request, env, 401, { error: "Unauthorized." });
   }
+  return null;
+}
+
+// Feedback newer than ?after=<ISO time>, oldest first, for the job that forwards it to the owner's phone.
+async function adminFeedback(request, env, url) {
+  const denied = await adminDenied(request, env);
+  if (denied) return denied;
+  const after = url.searchParams.get("after") || "";
+  const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 100);
+  const items = [];
+  let cursor;
+  do {
+    const page = await env.PROFILES.list({ prefix: FEEDBACK_PREFIX, limit: 1000, cursor });
+    for (const k of page.keys) {
+      if (items.length >= limit) break;
+      const when = k.name.slice(FEEDBACK_PREFIX.length, FEEDBACK_PREFIX.length + 24);     // the ISO time; the key goes on with ":<random>"
+      if (after && when <= after) continue;
+      const value = await env.PROFILES.get(k.name, "json");
+      if (value) items.push(value);
+    }
+    cursor = page.list_complete || items.length >= limit ? undefined : page.cursor;
+  } while (cursor);
+  return reply(request, env, 200, { items, last: items.length ? items[items.length - 1].t : after || null });
+}
+
+async function adminList(request, env, url) {
+  const denied = await adminDenied(request, env);
+  if (denied) return denied;
   const page = await env.PROFILES.list({ prefix: "p:", limit: PAGE, cursor: url.searchParams.get("cursor") || undefined });
   const rows = await Promise.all(page.keys.map((k) => env.PROFILES.get(k.name, "json")));
   // The id is the owner's secret, so it is never handed to the alert job: the topic names a profile there.
@@ -119,6 +153,27 @@ export async function handle(request, env, now = Date.now()) {
 
   if (path === "/api/health" && method === "GET") return reply(request, env, 200, { ok: true, dispatch: await lastDispatch(env), site: await lastDispatch(env, SITE_META_KEY) });
   if (path === "/api/admin/profiles" && method === "GET") return adminList(request, env, url);
+  if (path === "/api/admin/feedback" && method === "GET") return adminFeedback(request, env, url);
+
+  if (path === "/api/feedback" && method === "POST") {
+    const text = await request.text();
+    if (text.length > MAX_FEEDBACK_BYTES) return reply(request, env, 413, { error: "That is too long." });
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return reply(request, env, 400, { error: "The request body must be JSON." });
+    }
+    const result = cleanFeedback(parsed);
+    if (!result.ok) return reply(request, env, 400, { errors: result.errors });
+    if (await overLimit(request, env, now, "feedback", Number(env.FEEDBACK_LIMIT_PER_HOUR) || 20)) {
+      return reply(request, env, 429, { error: "That is a lot of feedback from one connection. Try again in an hour." }, { "Retry-After": "3600" });
+    }
+    const t = new Date(now).toISOString();
+    // The key sorts by time, so listing the prefix returns feedback oldest first.
+    await env.PROFILES.put(`${FEEDBACK_PREFIX}${t}:${hex(randomBytes(3))}`, JSON.stringify({ t, ...result.feedback }), { expirationTtl: KEEP_SECONDS });
+    return reply(request, env, 201, { ok: true });
+  }
 
   if (path === "/api/profile" && method === "POST") {
     const body = await readJson(request);

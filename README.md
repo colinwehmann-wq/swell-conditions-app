@@ -123,6 +123,13 @@ private link, and each person gets a private ntfy channel.
 - [`tools/profile_alerts.py`](tools/profile_alerts.py) and [`profile-alerts.yml`](.github/workflows/profile-alerts.yml):
   the hourly job that reads every profile, checks the forecast and sends the alerts. Needs the `PROFILES_ADMIN_KEY` secret.
 
+## Feedback
+
+Each break's page ends with "How was it?": one tap for better than rated, about right or worse than rated, with the rating
+that was showing recorded alongside. That is how the ratings get checked against real sessions. There is also a general
+[Send feedback](https://colinwehmann-wq.github.io/swell-conditions-app/feedback/) page. Both go to the profile service, and a
+half-hourly job forwards anything new to the owner's phone.
+
 ## The map
 
 [`/map/`](https://colinwehmann-wq.github.io/swell-conditions-app/map/) shows every break as a pin with its rating; tap one for its

@@ -1,4 +1,4 @@
-"""The break roster in config.py: every entry has to be coherent, because a typo in one of 27
+"""The break roster in config.py: every entry has to be coherent, because a typo in one of 28
 breaks' coordinates, tide range or buoy would otherwise go unnoticed until someone relied on it."""
 import math
 import os
@@ -118,6 +118,31 @@ class Roster(unittest.TestCase):
         swamis = config.spot_config(config.SPOTS[0])
         self.assertEqual(swamis["buoys"], ["46224", "46225"])
         self.assertEqual(swamis["tide_ideal_ft"], [2.5, 5.0])
+
+    def test_pipes_sits_between_swamis_and_cardiff_reef_where_the_spot_guides_put_it(self):
+        by = {c["slug"]: c for c in cfgs()}
+        pipes, north, south = by["pipes"], by["swamis"], by["cardiff"]
+        self.assertLess(south["lat"], pipes["lat"])
+        self.assertLess(pipes["lat"], north["lat"])
+        self.assertLess(km(pipes["lat"], pipes["lon"], 33.0246, -117.2888), 0.5)     # the two guides agree to within a few hundred metres
+        self.assertLess(km(pipes["lat"], pipes["lon"], south["lat"], south["lon"]), 3.0)
+        self.assertEqual(pipes["area"], "Cardiff")
+
+    def test_pipes_wants_what_the_guides_say_it_wants(self):
+        c = {c["slug"]: c for c in cfgs()}["pipes"]
+        lo, hi = c["swell_dir_deg"]
+        self.assertLessEqual(lo, 195)                      # the guides give 182 to 303 degrees: south-west through west-north-west
+        self.assertGreaterEqual(hi, 300)
+        self.assertLess(c["tide_ideal_ft"][1], 4.0)        # low to mid tide, not the high water Cardiff Reef likes
+        self.assertEqual(c["offshore_dir_deg"], [40, 110])  # north-east to east, east-north-east best
+        self.assertEqual(c["height_ideal_ft"], [3.0, 6.0])
+        self.assertFalse(c["mine"])
+        self.assertEqual(c["buoys"], config.BUOY_CENTRAL)
+
+    def test_pipes_is_found_by_the_names_people_use(self):
+        c = {c["slug"]: c for c in cfgs()}["pipes"]
+        for alias in ("pipes", "san elijo", "campgrounds"):
+            self.assertIn(alias, c["aliases"])
 
     def test_home_shows_five(self):
         self.assertEqual(config.HOME_COUNT, 5)

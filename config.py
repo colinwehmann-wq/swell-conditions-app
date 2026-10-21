@@ -217,6 +217,18 @@ SPOTS = [
         "notes": "Reef that wants a clean swell and a mid-to-high tide. Crowded when it's on.",
     },
     {
+        # In front of the San Elijo State Beach campground, between Swami's and Cardiff Reef. Position and conditions are from
+        # the spot guides at mondo.surf and surfnerd.com (swell window 182-303 degrees, NE-E offshore, low to mid tide).
+        "name": "Pipes", "slug": "pipes", "area": "Cardiff",
+        "aliases": ["pipes", "san elijo", "san elijo state beach", "san elijo campground", "campgrounds", "pipes cardiff"],
+        "lat": 33.0246, "lon": -117.2888, "buoys": BUOY_CENTRAL,
+        "swell_dir_deg": [190, 305],
+        "height_ok_ft": [2.5, 8.0], "height_ideal_ft": [3.0, 6.0],
+        "tide_ideal_ft": [0.5, 3.5], "tide_ok_ft": [-0.5, 4.5],
+        "notes": "Reef and rock between Swami's and Cardiff. A dependable left with a wall, and rights on bigger days. Best on a "
+                 "rising low-to-mid tide with an east-northeast wind.",
+    },
+    {
         "name": "Fletcher Cove", "slug": "fletcher-cove", "area": "Solana Beach",
         "aliases": ["fletchers", "tabletops", "solana beach", "solana"],
         "lat": 32.9914, "lon": -117.2739, "buoys": BUOY_CENTRAL,

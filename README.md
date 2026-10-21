@@ -1,7 +1,7 @@
 # Swell Conditions App
 
 A surf-alert system for San Diego County. It pulls live data from NOAA
-buoys, tide predictions, and a wind/wave forecast, scores 27 breaks against
+buoys, tide predictions, and a wind/wave forecast, scores 28 breaks against
 per-spot criteria, and sends a plain-language phone notification — with the best
 time window — only when a spot is actually worth paddling out. It runs unattended
 in GitHub Actions on a schedule.
@@ -213,8 +213,8 @@ A static site, rebuilt on every scheduled run and deployed to GitHub Pages:
   collisions, and the workflow only publishes to them from scheduled runs.
 - **Open data** — the same numbers are published as `data/latest.json`.
 - **Photos** — a full-bleed photo behind the home hero and each break's page, and a thumbnail
-  beside every break name (a small 480 px copy, so the tiles stay light). 25 of the 27 breaks have
-  one; the other two show a plain tile until a free-licensed photo turns up. They're Creative Commons images from Wikimedia Commons; the file,
+  beside every break name (a small 480 px copy, so the tiles stay light). 25 of the 28 breaks have
+  one; the other three (Bird Rock, Buccaneer Beach and Pipes) show a plain tile until a free-licensed photo turns up. They're Creative Commons images from Wikimedia Commons; the file,
   crop point and licence for each live in [`sitegen/media.py`](sitegen/media.py), the credits are
   printed on the page and in the footer, and a test fails if a spot is missing a photo or a credit.
   Images are resized to web weight (under ~500 KB each) and the slow zoom stops for visitors who

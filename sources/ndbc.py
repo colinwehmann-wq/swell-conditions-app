@@ -169,6 +169,35 @@ def fetch_spec_history(buoy, hours=30.0):
     return out
 
 
+def fetch_water_temp(buoy, max_age_hours=4.0):
+    """The buoy's latest water temperature in °F as {"temp_f", "time", "age_hours", "source"}, or None.
+
+    From the standard met file, column WTMP (°C), which the four offshore wave buoys all report. Rows with no
+    reading ("MM") are skipped; one older than `max_age_hours` is not used.
+
+    Columns: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP ...
+    """
+    try:
+        rows = _data_rows(http.get("https://www.ndbc.noaa.gov/data/realtime2/%s.txt" % buoy))
+    except Exception:
+        return None
+    for r in rows:
+        if len(r) < 15:
+            continue
+        try:
+            t = _row_time(r)
+        except ValueError:
+            continue
+        celsius = _num(r[14])
+        if celsius is None:
+            continue
+        age = _age_hours(t)
+        if age > max_age_hours or not (0.0 <= celsius <= 40.0):
+            return None
+        return {"temp_f": celsius * 9.0 / 5.0 + 32.0, "time": t, "age_hours": age, "source": "buoy %s" % buoy}
+    return None
+
+
 def fetch_wind(buoy, max_age_hours=2.0):
     """Buoy anemometer wind, if the buoy has one and it's fresh. Many CDIP wave
     buoys (incl. 46224 / 46225) report no wind, so callers must handle None.

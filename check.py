@@ -54,6 +54,7 @@ class Context:
         self._marine = {}
         self._wind = {}
         self._sun = {}
+        self._water = {}
 
     def prefetch(self, spots, workers=8):
         """Fetch everything the spots will ask for, concurrently, so the loop that follows only
@@ -68,6 +69,8 @@ class Context:
             jobs[("tide", cfg["tide_station"])] = lambda s=cfg["tide_station"]: self.tide(s)
             for bid in cfg["buoys"]:
                 jobs[("buoy", bid)] = lambda bid=bid: self._reading(bid)
+                jobs[("water", bid)] = lambda bid=bid: self._water_at(("buoy", bid))
+            jobs[("water", cfg["tide_station"])] = lambda s=cfg["tide_station"]: self._water_at(("station", s))
 
         def run_one(job):
             try:
@@ -77,6 +80,24 @@ class Context:
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
             list(pool.map(run_one, jobs.values()))
+
+    def _water_at(self, key):
+        """Water temperature from one buoy or tide station, fetched once however many breaks ask."""
+        if key not in self._water:
+            try:
+                kind, ident = key
+                self._water[key] = ndbc.fetch_water_temp(ident) if kind == "buoy" else tides.fetch_water_temp(ident)
+            except Exception:  # noqa: BLE001 - water temperature is a nicety: never let it break a run
+                self._water[key] = None
+        return self._water[key]
+
+    def water(self, cfg):
+        """The water temperature near a break: its first buoy that reports one, else its tide station's gauge, else None."""
+        for bid in cfg["buoys"]:
+            w = self._water_at(("buoy", bid))
+            if w:
+                return w
+        return self._water_at(("station", cfg["tide_station"]))
 
     def _reading(self, bid):
         if bid not in self._buoys:
@@ -587,6 +608,9 @@ def run(args):
                 "outlook": evaluate.outlook(cfg, now, buoy, tide, marine, wind, sun_map, calib,
                                             days=config.OUTLOOK_DAYS),
                 "sun": today_sun,
+                "chart_sun": chart_sun,
+                "tide": tide,
+                "water": ctx.water(cfg),
                 "timeline_day": chart_day,
                 "timeline": (evaluate.timeline(cfg, chart_day, chart_sun, now, buoy, tide, marine,
                                                wind, calib) if chart_sun and chart_sun[0] else []),

@@ -42,6 +42,24 @@ class TideSeries:
         return None
 
 
+def fetch_water_temp(station, max_age_hours=6.0):
+    """The station's latest water temperature in °F as {"temp_f", "time", "age_hours", "source"}, or None if it has none.
+    A backup for buoys that report no water temperature; La Jolla's pier gauge agrees with the offshore buoys to ~1°F."""
+    url = ("%s?product=water_temperature&application=swell-conditions-app&date=latest&units=english"
+           "&time_zone=lst_ldt&format=json&station=%s" % (_BASE, station))
+    try:
+        rows = http.get_json(url).get("data") or []
+        row = rows[-1]
+        when = datetime.datetime.strptime(row["t"], "%Y-%m-%d %H:%M").replace(tzinfo=TZ)
+        temp = float(row["v"])
+    except Exception:  # noqa: BLE001 - no data, a malformed row or the network: callers just go without
+        return None
+    age = (datetime.datetime.now(TZ) - when).total_seconds() / 3600.0
+    if age > max_age_hours or not (30.0 <= temp <= 100.0):
+        return None
+    return {"temp_f": temp, "time": when, "age_hours": age, "source": "tide station %s" % station}
+
+
 def fetch(station, start_date, days=3):
     url = (
         "%s?product=predictions&application=swell-conditions-app"

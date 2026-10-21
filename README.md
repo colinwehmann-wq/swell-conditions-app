@@ -130,6 +130,13 @@ that was showing recorded alongside. That is how the ratings get checked against
 [Send feedback](https://colinwehmann-wq.github.io/swell-conditions-app/feedback/) page. Both go to the profile service, and a
 half-hourly job forwards anything new to the owner's phone.
 
+## On each break's page
+
+Besides the rating, the hour-by-hour chart and the week ahead, a break's page shows the **water temperature** with what to wear
+(from the offshore buoy's own sensor, falling back to the La Jolla tide gauge), **sunrise and sunset**, and the day's **tide
+graph** with the highs and lows, the daylight hours shaded and a marker for now. The graph is plain inline SVG with no script
+(`sitegen/tide_chart.py`), described in words for screen readers.
+
 ## The map
 
 [`/map/`](https://colinwehmann-wq.github.io/swell-conditions-app/map/) shows every break as a pin with its rating; tap one for its

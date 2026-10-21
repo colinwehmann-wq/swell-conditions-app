@@ -10,6 +10,10 @@ name: profile alerts
 # The schedule below is only a backup. GitHub runs a quiet repository's cron every few hours at best,
 # so the profile service's Worker wakes this workflow itself every 30 minutes (worker/src/dispatch.js)
 # by calling workflow_dispatch with dry_run=false.
+#
+# The same run forwards any new site feedback (the "How was it?" buttons) to the owner's phone with
+# tools/feedback_forward.py. It needs the NTFY_TOPIC secret already used by the site workflow, and it never logs
+# what anyone wrote: this repository's Actions logs are public.
 
 on:
   schedule:
@@ -36,11 +40,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # Which alerts have already gone out, so the same window never pings twice.
+      # Which alerts and which feedback have already gone out, so nothing is sent twice.
       - name: Restore sent-alerts state
         uses: actions/cache/restore@v4
         with:
-          path: .profile-state.json
+          path: |
+            .profile-state.json
+            .feedback-state.json
           key: profile-state-${{ github.run_id }}
           restore-keys: profile-state-
 
@@ -49,9 +55,18 @@ jobs:
           PROFILES_ADMIN_KEY: ${{ secrets.PROFILES_ADMIN_KEY }}
         run: python3 tools/profile_alerts.py ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
 
+      - name: Forward new feedback to the owner
+        if: always()
+        env:
+          PROFILES_ADMIN_KEY: ${{ secrets.PROFILES_ADMIN_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 tools/feedback_forward.py ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+
       - name: Save sent-alerts state
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: .profile-state.json
+          path: |
+            .profile-state.json
+            .feedback-state.json
           key: profile-state-${{ github.run_id }}

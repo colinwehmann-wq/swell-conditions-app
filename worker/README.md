@@ -19,7 +19,9 @@ person's alerts are sent to.
 | `PUT /api/profile/:id` | Replace it. The topic never changes. |
 | `DELETE /api/profile/:id` | Delete it (204). |
 | `GET /api/admin/profiles?cursor=` | Every profile, 100 at a time, for the alert job. Needs `Authorization: Bearer <ADMIN_KEY>`. Never returns ids. |
-| `GET /api/health` | `{ "ok": true }` |
+| `POST /api/feedback` | Store a piece of site feedback (a break's "better / about right / worse than rated" and a note, or a general note). 201. |
+| `GET /api/admin/feedback?after=` | New feedback, oldest first, for the job that forwards it to the owner's phone. Same key as the profile listing. |
+| `GET /api/health` | `{ "ok": true, "dispatch": ..., "site": ... }` |
 
 The shape of a profile, and every limit on it, is in [`src/validate.js`](src/validate.js).
 New profiles are limited to 10 per address per hour, bodies to 8 KB, and writes from other websites
@@ -52,6 +54,14 @@ are refused. The address is only ever stored as a one-way hash for that hourly c
 5. **Give GitHub the same key.** In the repository: Settings, Secrets and variables, Actions, New repository
    secret. Name it `PROFILES_ADMIN_KEY` and paste (the key is still on your clipboard).
 6. Check it is up: open `https://swell-profiles.<your-name>.workers.dev/api/health`. You should see `{"ok":true}`.
+
+## Feedback
+
+The site's "How was it?" buttons and the Send feedback page post to `/api/feedback`. It is limited to 20 per address per hour
+and 4 KB each, writes from other websites are refused, and only a one-way hash of the address is kept, for the hour. Feedback
+is stored for six months. [`tools/feedback_forward.py`](../tools/feedback_forward.py), run by the same half-hourly workflow as the
+personal alerts, forwards anything new to the owner's private phone topic (the repository secret `NTFY_TOPIC`) and never prints
+it to the log, because this repository's Actions logs are public.
 
 ## Waking the alert job (so alerts arrive on time)
 

@@ -390,7 +390,7 @@ def sitemap(payload):
     """sitemap.xml: every page, with the day the site was last built."""
     base = payload["site_url"].rstrip("/")
     day = payload["generated"][:10]
-    paths = ["", "map/", "breaks/", "profile/"] + ["spots/%s/" % s["slug"] for s in payload["spots"]]
+    paths = ["", "map/", "breaks/", "profile/", "feedback/"] + ["spots/%s/" % s["slug"] for s in payload["spots"]]
     urls = "".join("<url><loc>%s/%s</loc><lastmod>%s</lastmod></url>" % (base, p, day) for p in paths)
     return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">%s</urlset>' % urls
 
@@ -410,6 +410,7 @@ def build(inputs, now, outdir):
     _write(os.path.join(outdir, "breaks", "index.html"), render.breaks_page(payload))
     _write(os.path.join(outdir, "profile", "index.html"), render.profile_page(payload))
     _write(os.path.join(outdir, "map", "index.html"), render.map_page(payload))
+    _write(os.path.join(outdir, "feedback", "index.html"), render.feedback_page(payload))
     _write(os.path.join(outdir, "manifest.webmanifest"), json.dumps(manifest(), indent=2))
     _write(os.path.join(outdir, "sitemap.xml"), sitemap(payload))
     _write(os.path.join(outdir, "404.html"), render.not_found_page(payload))

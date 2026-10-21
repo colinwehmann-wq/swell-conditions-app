@@ -180,7 +180,8 @@ def _footer(payload):
         '<div><h2 class="foot-h">About</h2>'
         '<p>An open-source project. The scoring, the tests and the roadmap are all in the '
         '<a href="%s">repository</a>. The raw numbers behind every page are in '
-        '<a href="%sdata/latest.json">latest.json</a>.</p></div>'
+        '<a href="%sdata/latest.json">latest.json</a>.</p>'
+        '<p><a href="%sfeedback/">Send feedback</a></p></div>'
         '<div><h2 class="foot-h">Please note</h2>'
         '<p>Informational only. Forecasts are wrong, buoys go offline, and the ocean is dangerous — '
         'check conditions yourself and surf within your ability.</p></div>'
@@ -188,7 +189,7 @@ def _footer(payload):
         '<p>From Wikimedia Commons, used under Creative Commons licences.</p><ul class="plain">%s</ul></div>'
         '</div></footer>'
         % (esc(s["waves"]), esc(s["tides"]), esc(s["forecast"]), esc(payload["repo_url"]),
-           esc(payload["site_url"].rstrip("/") + "/"), _photo_credits(payload))
+           esc(payload["site_url"].rstrip("/") + "/"), esc(payload["site_url"].rstrip("/") + "/"), _photo_credits(payload))
     )
 
 
@@ -625,6 +626,59 @@ def map_page(payload):
                   styles=("vendor/leaflet/leaflet.css",))
 
 
+def _feedback_form(payload, kind, spot=None):
+    """The feedback form, wired by assets/feedback.js. For a break it carries the rating that was showing."""
+    if kind == "break":
+        data = ' data-slug="%s" data-name="%s" data-rating="%s" data-label="%s"' % (
+            esc(spot["slug"]), esc(spot["name"]), "%.1f" % spot["rating"], esc(spot["label"]))
+        votes = (
+            '<div class="fb-votes" role="group" aria-label="How did it compare with the rating?">'
+            '<button type="button" class="fb-vote" data-vote="better" aria-pressed="false">Better than rated</button>'
+            '<button type="button" class="fb-vote" data-vote="right" aria-pressed="false">About right</button>'
+            '<button type="button" class="fb-vote" data-vote="worse" aria-pressed="false">Worse than rated</button></div>')
+        note_label = "Anything to add? Size, wind, crowd, time of day. (optional)"
+        thanks = "Thanks, that helps. Every answer tunes the ratings for the people who surf here."
+    else:
+        data, votes = "", ""
+        note_label = "What is missing, confusing or wrong?"
+        thanks = "Thanks, that is on its way to the person building this."
+    return (
+        '<div class="fb" data-feedback data-kind="%s" data-api="%s"%s>'
+        '<div data-fb-form>%s'
+        '<label class="pf-field">%s<textarea name="note" rows="3" maxlength="500"></textarea></label>'
+        '<label class="pf-field">Email, only if you would like a reply (optional)'
+        '<input name="contact" type="email" maxlength="80" autocomplete="email"></label>'
+        '<div class="pf-actions"><button class="btn btn-primary" type="button" data-fb-send disabled>Send feedback</button>'
+        '<span class="pf-status muted" data-fb-status role="status" aria-live="polite"></span></div>'
+        '<p class="note">This goes to the person who built the site. Your connection\'s address is not stored.</p></div>'
+        '<p class="fb-thanks" data-fb-thanks hidden>%s</p></div>'
+        % (kind, esc(payload.get("profiles_api", "")), data, votes, note_label, thanks)
+    )
+
+
+def _feedback_section(spot, payload):
+    """'How was it?' on a break's page: how a session compared with the rating, which is what tunes the ratings."""
+    return (
+        '<section id="feedback" class="sec"><div class="wrap"><h2>How was it?</h2>'
+        '<p class="sec-lede">Been out at %s? Tell us how your session compared with the rating above (%.1f, %s when this page '
+        'was built). Answers like this are how the ratings get better.</p>%s</div></section>'
+        % (esc(spot["name"]), spot["rating"], esc(spot["label"]), _feedback_form(payload, "break", spot))
+    )
+
+
+def feedback_page(payload):
+    """A page for general feedback: what is missing, confusing or wrong."""
+    head = (
+        '<section class="page-head"><div class="wrap"><p class="crumb"><a href="../">← San Diego County</a></p>'
+        '<h1>Send feedback</h1><p class="lede">This is an early version, built in the open. Tell me what is missing, confusing '
+        'or wrong. A rating that did not match your session is the most useful thing of all: open that break and use '
+        '"How was it?" at the bottom of its page.</p></div></section>'
+    )
+    body = head + '<section class="sec"><div class="wrap">%s</div></section>' % _feedback_form(payload, "general")
+    return _shell("Send feedback — Swell Check", "Tell us what is missing, confusing or wrong with Swell Check.",
+                  body, "../", payload, "feedback", og_slug=media.HERO_SLUG, scripts=("feedback.js",))
+
+
 def profile_page(payload):
     """Pick breaks and ideal conditions; the script (assets/profile.js) saves them to the profile service."""
     groups = {}
@@ -657,23 +711,23 @@ def profile_page(payload):
         'face you ride. A 4 ft swell at 15 seconds is typically chest- to head-high at most breaks, so a long period '
         'surfs bigger than the number says. Not sure? Pick a starting point above and change it after your first alerts.</p>'
         '<div class="pf-grid">'
-        '<label class="pf-field">Wave height, from <span class="muted">ft</span><input name="height_min" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
-        '<label class="pf-field">to <span class="muted">ft</span><input name="height_max" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
-        '<label class="pf-field">Swell period at least <span class="muted">seconds</span><input name="period_min" type="number" step="1" min="0" max="25" inputmode="decimal"></label>'
+        '<label class="pf-field"><span>Wave height, from <span class="muted">ft</span></span><input name="height_min" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
+        '<label class="pf-field"><span>to <span class="muted">ft</span></span><input name="height_max" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
+        '<label class="pf-field"><span>Swell period at least <span class="muted">seconds</span></span><input name="period_min" type="number" step="1" min="0" max="25" inputmode="decimal"></label>'
         '</div>'
         '<fieldset class="pf-wind"><legend>Wind</legend>'
         '<label class="pf-radio"><input type="radio" name="wind" value="offshore"> Offshore only <span class="muted">(or glassy calm)</span></label>'
         '<label class="pf-radio"><input type="radio" name="wind" value="light"> Light, any direction</label>'
         '<label class="pf-radio"><input type="radio" name="wind" value="any"> I don\'t mind</label>'
-        '<label class="pf-field pf-inline">Top speed <span class="muted">knots</span><input name="wind_max" type="number" step="1" min="0" max="40" inputmode="decimal"></label>'
+        '<label class="pf-field pf-inline"><span>Top speed <span class="muted">knots</span></span><input name="wind_max" type="number" step="1" min="0" max="40" inputmode="decimal"></label>'
         '</fieldset>'
         '<div class="pf-grid">'
         '<label class="pf-field">Swell from<select name="dir_from">%s</select></label>'
         '<label class="pf-field">to<select name="dir_to">%s</select></label>'
         '</div>'
         '<div class="pf-grid">'
-        '<label class="pf-field">Tide, lowest <span class="muted">ft, blank = any</span><input name="tide_min" type="number" step="0.5" min="-3" max="8" inputmode="decimal"></label>'
-        '<label class="pf-field">highest <span class="muted">ft</span><input name="tide_max" type="number" step="0.5" min="-3" max="8" inputmode="decimal"></label>'
+        '<label class="pf-field"><span>Tide, lowest <span class="muted">ft, blank = any</span></span><input name="tide_min" type="number" step="0.5" min="-3" max="8" inputmode="decimal"></label>'
+        '<label class="pf-field"><span>highest <span class="muted">ft</span></span><input name="tide_max" type="number" step="0.5" min="-3" max="8" inputmode="decimal"></label>'
         '</div>'
         '<h2>Your alerts</h2>'
         '<div class="pf-grid">'
@@ -739,7 +793,7 @@ def spot_page(spot, payload):
     hero = (
         '<section class="spot-hero%s">%s<div class="wrap"><p class="crumb"><a href="../../">← San Diego County</a> · <a href="../../breaks/">All breaks</a> · <a href="../../map/#%s">On the map</a></p>'
         '<div class="spot-hero-in"><div><p class="kicker">%s</p><h1>%s</h1><p class="lede">%s</p>'
-        '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s</p></div>'
+        '<p class="meta"><time datetime="%s" data-age>Updated %s</time> · %s · <a href="#feedback">Been out? Tell us how it was</a></p></div>'
         '<div class="hero-fig static"><span class="fig-num">%.1f</span><span class="fig-meta">%s</span></div></div></div>%s</section>'
         % (" has-photo curtain" if bg else "", bg, esc(spot["slug"]), esc(_place(spot)), esc(spot["name"]), esc(spot["notes"]),
            esc(payload["generated"]), esc(payload["generated_label"]),
@@ -791,6 +845,7 @@ def spot_page(spot, payload):
            ideal["period_min_s"], ideal["period_ideal_s"], _f(ideal["tide_ft"][0]), _f(ideal["tide_ft"][1]), ideal["wind_max_kn"])
     )
     likes += _rated_section(spot)
+    likes += _feedback_section(spot, payload)
     alerts = (
         '<section id="alerts" class="sec"><div class="wrap"><h2>Get %s alerts</h2>'
         '<div class="cta-card"><div><h3>Want it tuned to your conditions?</h3>'
@@ -803,7 +858,7 @@ def spot_page(spot, payload):
     body = hero + _sheet(now_sec + today + week + bring + likes + alerts)
     return _shell("%s — Swell Check" % spot["name"],
                   "Live conditions, today's best window and a 7-day outlook for %s, %s." % (spot["name"], spot["area"]),
-                  body, "../../", payload, "spot", spot["slug"])
+                  body, "../../", payload, "spot", spot["slug"], scripts=("feedback.js",))
 
 
 def not_found_page(payload):

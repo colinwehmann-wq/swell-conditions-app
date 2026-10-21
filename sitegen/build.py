@@ -13,7 +13,7 @@ import config
 from sources import boards, evaluate, words
 from sources.timeutil import clock, hour_label
 
-from . import render
+from . import render, tide_chart
 
 _ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 _NTFY_HOST = "ntfy.sh"
@@ -186,8 +186,34 @@ def _spot(item, now):
             "wind_max_kn": cfg["wind_max_kn"],
         },
         "benchmark": _benchmark(cfg.get("benchmark")),
+        "water": _water(item.get("water")),
+        "sun": _sun(item.get("chart_sun")),
+        "tide_day": _tide_day(item, now),
         "ntfy": _ntfy(cfg["ntfy_topic"]),
     }
+
+
+def _water(w):
+    """Water temperature for the page, with what to wear, or None."""
+    if not w:
+        return None
+    return {"temp_f": round(w["temp_f"], 1), "source": w["source"], "age_minutes": int(round(w["age_hours"] * 60)),
+            "suit": words.wetsuit(w["temp_f"])}
+
+
+def _sun(sun):
+    """Sunrise, sunset and the hour the light runs out for the day the chart shows, or None."""
+    if not sun or not sun[0] or not sun[1]:
+        return None
+    return {"sunrise": _iso(sun[0]), "sunset": _iso(sun[1]), "last_light": _iso(evaluate.last_row_start(sun[1]))}
+
+
+def _tide_day(item, now):
+    sun = item.get("chart_sun")
+    if not sun or not sun[0] or not sun[1]:
+        return None
+    day = item.get("timeline_day") or now.date()
+    return tide_chart.build_day(item.get("tide"), day, sun[0], sun[1])
 
 
 def _benchmark(b):

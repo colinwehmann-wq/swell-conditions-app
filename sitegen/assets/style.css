@@ -528,3 +528,18 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .fb-thanks { margin: 0; padding: 16px 18px; border: 1px solid var(--axis); border-radius: 12px; background: var(--surface); }
 @media (max-width: 480px) { .fb-votes { grid-template-columns: 1fr; } }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+
+/* the tide graph */
+.tide-fig { margin: 8px 0 0; max-width: 620px; }
+.tide { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
+.tide-day { fill: var(--wash); }
+.tide-grid { stroke: var(--hair); stroke-width: 1; }
+.tide-zero { stroke: var(--axis); stroke-width: 1.4; }
+.tide-tick, .tide-unit, .tide-sun, .tide-labelsub, .tide-nowlabel { fill: var(--muted); font-size: 12px; }
+.tide-sun { font-size: 11.5px; }
+.tide-area { fill: var(--link); opacity: 0.16; }
+.tide-line { fill: none; stroke: var(--link); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.tide-dot { fill: var(--surface); stroke: var(--link); stroke-width: 2.4; }
+.tide-label { fill: var(--ink); font-size: 14px; font-weight: 600; }
+.tide-now { stroke: var(--ink-2); stroke-width: 1.4; stroke-dasharray: 4 4; }
+.tide-nowlabel { fill: var(--ink-2); font-weight: 600; }

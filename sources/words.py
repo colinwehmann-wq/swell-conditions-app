@@ -47,6 +47,26 @@ def rating_band(r):
     return "red"
 
 
+# What to wear, by water temperature in °F. San Diego's water runs about 58 to 74, so most of these get used in a year.
+WETSUIT_STEPS = [
+    (72.0, "Boardshorts", "Warm: trunks, maybe a rash guard"),
+    (68.0, "Spring suit", "Mild: a short-sleeve spring suit or a 2 mm"),
+    (64.0, "3/2 wetsuit", "Cool: a 3/2 full wetsuit"),
+    (60.0, "4/3 wetsuit", "Cold: a 4/3 full wetsuit, boots in the morning"),
+    (55.0, "4/3 plus boots", "Cold: a 4/3 with boots, and a hood if you run cold"),
+    (-99.0, "5/4 hooded", "Very cold: a 5/4 with hood, boots and gloves"),
+]
+
+
+def wetsuit(temp_f):
+    """{"label", "hint"} for a water temperature in °F, or None if it is unknown."""
+    if temp_f is None:
+        return None
+    for floor, label, hint in WETSUIT_STEPS:
+        if temp_f >= floor:
+            return {"label": label, "hint": hint}
+
+
 def size_words(ft):
     if ft is None:
         return "size unknown"

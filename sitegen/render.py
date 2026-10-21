@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from sources import words
 
-from . import media
+from . import media, tide_chart
 
 _CLS = {"green": "good", "yellow": "ok", "orange": "serious", "red": "poor"}
 _ICO = {"green": "✓", "yellow": "!", "orange": "▼", "red": "✕"}
@@ -766,6 +766,36 @@ def profile_page(payload):
                   head + form, "../", payload, "profile", og_slug=media.HERO_SLUG, scripts=("profile.js",))
 
 
+def _water_stat(spot, stat):
+    """The Water tile: temperature and what to wear, or nothing when no gauge near the break reported one."""
+    w = spot.get("water")
+    if not w:
+        return []
+    suit = (w.get("suit") or {}).get("label", "")
+    return [stat("Water", "%d °F" % round(w["temp_f"]), "%s weather" % suit.lower() if suit else "")]
+
+
+def _sun_line(spot):
+    sun = spot.get("sun")
+    if not sun:
+        return ""
+    return "Sunrise %s · sunset %s" % (_clock(sun["sunrise"]), _clock(sun["sunset"]))
+
+
+def _tide_section(spot, payload):
+    """The day's tide as a graph, with the highs and lows in words. Empty when there are no predictions."""
+    td = spot.get("tide_day")
+    if not td:
+        return ""
+    label = spot.get("timeline_label", "Today")
+    is_today = label == "Today"
+    return (
+        '<section id="tide" class="sec"><div class="wrap"><h2>Tide, %s</h2><p class="sec-lede">%s</p>'
+        '<figure class="tide-fig">%s</figure></div></section>'
+        % (esc(label.lower()), esc(tide_chart.describe(td)), tide_chart.tide_svg(td, payload["generated"] if is_today else None))
+    )
+
+
 def spot_page(spot, payload):
     c = spot["now"]
     board = spot.get("board")
@@ -785,7 +815,7 @@ def spot_page(spot, payload):
         stat("Swell from", c["swell_dir"] or "—", " · ".join(x for x in dir_note if x)),
         stat("Wind", "%d kt %s" % (c["wind_kn"], c["wind_dir"] or "") if c["wind_kn"] is not None else "—", c["words"]["wind"]),
         stat("Tide", "%s ft" % _f(c["tide_ft"]) if c["tide_ft"] is not None else "—", c["words"]["tide"]),
-    ])
+    ] + _water_stat(spot, stat))
     buoy = spot.get("buoy")
     buoy_txt = ("Live reading from NOAA buoy %s, %d min old%s." % (buoy["id"], buoy["age_minutes"], " (stale — showing the model)" if buoy["stale"] else "")
                 if buoy else "No buoy reading right now — showing the forecast model.")
@@ -803,7 +833,7 @@ def spot_page(spot, payload):
     today = (
         '<section id="today" class="sec"><div class="wrap"><h2>%s, hour by hour</h2>'
         '<p class="sec-lede">%s</p>%s%s</div></section>'
-        % (esc(spot.get("timeline_label", "Today")), esc(window_text(spot)),
+        % (esc(spot.get("timeline_label", "Today")), esc(" · ".join(x for x in (window_text(spot), _sun_line(spot)) if x)),
            timeline_chart(spot, payload["generated"]), _legend())
     )
     items = []
@@ -855,7 +885,7 @@ def spot_page(spot, payload):
         '<a href="%s" rel="noopener">ntfy</a> app (<a href="%s" rel="noopener">Android</a>) — no account.</p>%s'
         '<p class="note">ntfy channels are public: anyone who knows the name can read or post to it.</p></div></section>'
         % (esc(spot["name"]), esc(spot["name"]), _IOS, _ANDROID, subscribe_buttons(spot["name"], spot["ntfy"])))
-    body = hero + _sheet(now_sec + today + week + bring + likes + alerts)
+    body = hero + _sheet(now_sec + today + _tide_section(spot, payload) + week + bring + likes + alerts)
     return _shell("%s — Swell Check" % spot["name"],
                   "Live conditions, today's best window and a 7-day outlook for %s, %s." % (spot["name"], spot["area"]),
                   body, "../../", payload, "spot", spot["slug"], scripts=("feedback.js",))

@@ -91,6 +91,24 @@
     };
   }
 
+  /* Starting points for the conditions, so nobody starts from a blank form. They set size, period and wind only:
+     the person's breaks, direction, tide and alert settings stay as they are. Sizes are swell height at the
+     offshore buoy, not wave face. */
+  var PRESETS = {
+    beginner:     { label: 'Beginner',     height_min: '2',   height_max: '4',  period_min: '8',  wind: 'light',   wind_max: '10' },
+    intermediate: { label: 'Intermediate', height_min: '3',   height_max: '6',  period_min: '10', wind: 'light',   wind_max: '12' },
+    advanced:     { label: 'Advanced',     height_min: '4',   height_max: '10', period_min: '12', wind: 'offshore', wind_max: '12' },
+    longboard:    { label: 'Longboard',    height_min: '1.5', height_max: '4',  period_min: '8',  wind: 'light',   wind_max: '12' }
+  };
+
+  function applyPreset(values, key) {
+    var p = PRESETS[key];
+    if (!p) return values;
+    var out = JSON.parse(JSON.stringify(values));
+    ['height_min', 'height_max', 'period_min', 'wind', 'wind_max'].forEach(function (k) { out[k] = p[k]; });
+    return out;
+  }
+
   function nearestDirection(deg) {
     var best = DIRECTIONS[0], bestGap = 999;
     DIRECTIONS.forEach(function (d) {
@@ -132,7 +150,8 @@
 
   var api = {
     DIRECTIONS: DIRECTIONS, DEFAULTS: DEFAULTS, buildProfile: buildProfile, valuesFromProfile: valuesFromProfile,
-    subscribeLinks: subscribeLinks, validId: validId, nearestDirection: nearestDirection
+    subscribeLinks: subscribeLinks, validId: validId, nearestDirection: nearestDirection,
+    PRESETS: PRESETS, applyPreset: applyPreset
   };
 
   // ----------------------------------------------------------------------------- the page
@@ -244,6 +263,13 @@
   }
 
   form.addEventListener('change', syncDependent);
+
+  Array.prototype.forEach.call(form.querySelectorAll('[data-preset]'), function (btn) {
+    btn.addEventListener('click', function () {
+      fillForm(applyPreset(readForm(), btn.getAttribute('data-preset')));
+      say('Filled in the ' + btn.textContent.toLowerCase() + ' starting point. Change anything you like, then save.');
+    });
+  });
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();

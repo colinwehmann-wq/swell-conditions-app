@@ -216,6 +216,10 @@ def _og_image(payload, slug):
 
 
 def _shell(title, description, body, prefix, payload, extra_class="", og_slug=None, scripts=(), styles=()):
+    # The home-screen icon and the manifest that lets a phone install the site as an app.
+    head_extra = ('<link rel="apple-touch-icon" href="%sassets/apple-touch-icon.png">'
+                  '<link rel="manifest" href="%smanifest.webmanifest">'
+                  '<meta name="apple-mobile-web-app-title" content="Swell Check">' % (prefix, prefix))
     return (
         '<!doctype html><html lang="en"><head>'
         '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -230,7 +234,7 @@ def _shell(title, description, body, prefix, payload, extra_class="", og_slug=No
         '<main id="main">%s</main>%s'
         '<div id="tip" class="tip" role="tooltip" hidden></div>'
         '%s<script src="%sassets/site.js" defer></script></body></html>'
-        % (esc(title), esc(description), esc(title), esc(description), _og_image(payload, og_slug), _FAVICON, _THEME_BOOT,
+        % (esc(title), esc(description), esc(title), esc(description), _og_image(payload, og_slug), _FAVICON, _THEME_BOOT + head_extra,
            "".join('<link rel="stylesheet" href="%sassets/%s">' % (prefix, esc(s)) for s in styles), prefix, esc(extra_class), _header(prefix), body, _footer(payload),
            "".join('<script src="%sassets/%s" defer></script>' % (prefix, esc(s)) for s in scripts), prefix)
     )
@@ -552,7 +556,7 @@ def breaks_page(payload):
     )
     return _shell("All breaks — Swell Check",
                   "Live surf ratings for all %d breaks in San Diego County, Oceanside to the border." % total,
-                  body, "../", payload, "breaks", scripts=("search.js",))
+                  body, "../", payload, "breaks", og_slug=media.HERO_SLUG, scripts=("search.js",))
 
 
 _COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
@@ -617,7 +621,7 @@ def map_page(payload):
     )
     return _shell("Surf map — Swell Check",
                   "Every surf break in San Diego County on a satellite map, with live ratings. Tap one for its conditions.",
-                  body, "../", payload, "map", scripts=("vendor/leaflet/leaflet.js", "map.js"),
+                  body, "../", payload, "map", og_slug=media.HERO_SLUG, scripts=("vendor/leaflet/leaflet.js", "map.js"),
                   styles=("vendor/leaflet/leaflet.css",))
 
 
@@ -639,9 +643,19 @@ def profile_page(payload):
     form = (
         '<section class="sec"><div class="wrap pf" data-profile-root data-api="%s">'
         '<noscript><p class="note">This page needs JavaScript to save your profile.</p></noscript>'
+        '<p class="note pf-privacy">What is stored: the breaks and conditions you choose here, and a random private channel name for '
+        'your alerts. No name, email or phone number. Delete your profile any time and it is gone.</p>'
         '<form class="pf-form" novalidate>'
         '<h2>Your breaks</h2><div class="pf-breaks">%s</div>'
         '<h2>Your ideal conditions</h2>'
+        '<p class="pf-presets" role="group" aria-label="Starting points">Start from: '
+        '<button class="btn btn-ghost" type="button" data-preset="beginner">Beginner</button>'
+        '<button class="btn btn-ghost" type="button" data-preset="intermediate">Intermediate</button>'
+        '<button class="btn btn-ghost" type="button" data-preset="advanced">Advanced</button>'
+        '<button class="btn btn-ghost" type="button" data-preset="longboard">Longboard</button></p>'
+        '<p class="pf-help">Wave height here is <strong>swell height at the offshore buoy</strong>, not the size of the wave '
+        'face you ride. A 4 ft swell at 15 seconds is typically chest- to head-high at most breaks, so a long period '
+        'surfs bigger than the number says. Not sure? Pick a starting point above and change it after your first alerts.</p>'
         '<div class="pf-grid">'
         '<label class="pf-field">Wave height, from <span class="muted">ft</span><input name="height_min" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
         '<label class="pf-field">to <span class="muted">ft</span><input name="height_max" type="number" step="0.5" min="0" max="30" inputmode="decimal"></label>'
@@ -695,7 +709,7 @@ def profile_page(payload):
     )
     return _shell("My alerts — Swell Check",
                   "Choose your breaks and ideal conditions and get a surf alert about an hour before they line up.",
-                  head + form, "../", payload, "profile", scripts=("profile.js",))
+                  head + form, "../", payload, "profile", og_slug=media.HERO_SLUG, scripts=("profile.js",))
 
 
 def spot_page(spot, payload):

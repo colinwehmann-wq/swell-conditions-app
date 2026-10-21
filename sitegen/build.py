@@ -368,6 +368,33 @@ def make_payload(inputs, now):
     }
 
 
+def manifest():
+    """The web app manifest: lets a phone put the site on the home screen with its own icon and no browser bar."""
+    return {
+        "name": "Swell Check",
+        "short_name": "Swell Check",
+        "description": "Surf conditions, ratings and personal alerts for every break in San Diego County.",
+        "start_url": "./",
+        "scope": "./",
+        "display": "standalone",
+        "background_color": "#0d0d0d",
+        "theme_color": "#0d0d0d",
+        "icons": [
+            {"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        ],
+    }
+
+
+def sitemap(payload):
+    """sitemap.xml: every page, with the day the site was last built."""
+    base = payload["site_url"].rstrip("/")
+    day = payload["generated"][:10]
+    paths = ["", "map/", "breaks/", "profile/"] + ["spots/%s/" % s["slug"] for s in payload["spots"]]
+    urls = "".join("<url><loc>%s/%s</loc><lastmod>%s</lastmod></url>" % (base, p, day) for p in paths)
+    return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">%s</urlset>' % urls
+
+
 def _write(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -383,6 +410,8 @@ def build(inputs, now, outdir):
     _write(os.path.join(outdir, "breaks", "index.html"), render.breaks_page(payload))
     _write(os.path.join(outdir, "profile", "index.html"), render.profile_page(payload))
     _write(os.path.join(outdir, "map", "index.html"), render.map_page(payload))
+    _write(os.path.join(outdir, "manifest.webmanifest"), json.dumps(manifest(), indent=2))
+    _write(os.path.join(outdir, "sitemap.xml"), sitemap(payload))
     _write(os.path.join(outdir, "404.html"), render.not_found_page(payload))
     _write(os.path.join(outdir, ".nojekyll"), "")
     shutil.copytree(_ASSETS, os.path.join(outdir, "assets"), dirs_exist_ok=True)

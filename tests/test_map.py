@@ -100,6 +100,13 @@ class Page(unittest.TestCase):
         for ico in ("✓", "!", "▼", "✕"):
             self.assertIn('<span class="pin-ico">%s</span>' % ico, self.html)
 
+    def test_a_dot_has_a_small_click_area_so_neighbours_do_not_cover_each_other(self):
+        css = read(os.path.join(ASSETS, "style.css"))
+        rule = re.search(r"\.map-far \.pin-wrap \{([^}]*)\}", css).group(1)
+        self.assertRegex(rule, r"width:\s*22px\s*!important")
+        self.assertRegex(rule, r"height:\s*22px\s*!important")
+        self.assertRegex(rule, r"margin-left:\s*-11px\s*!important")     # still centred on the break
+
     def test_the_card_starts_closed(self):
         self.assertRegex(self.html, r'<aside class="map-card" data-card hidden')
 
@@ -163,6 +170,8 @@ process.stdout.write(JSON.stringify({
   modes: input.modes.map(m => M.validMode(m)),
   tiles: M.TILES, farZoom: M.FAR_ZOOM, sat: M.SATELLITE_MIN_ZOOM, native: M.NATIVE_ZOOM,
   glyphs: M.GLYPH,
+  clusters: input.clusters.map(c => M.cluster(c.items, c.w, c.h, c.keep)),
+  boxes: [M.pinBox(true), M.pinBox(false)],
 }));
 """
 
@@ -170,7 +179,7 @@ process.stdout.write(JSON.stringify({
 @unittest.skipUnless(NODE, "Node is not installed")
 class Script(unittest.TestCase):
     def run_js(self, **kw):
-        base = {"hashes": [], "slugs": ["swamis", "d-street"], "zooms": [], "modes": [], "tips": []}
+        base = {"hashes": [], "slugs": ["swamis", "d-street"], "zooms": [], "modes": [], "tips": [], "clusters": []}
         base.update(kw)
         out = subprocess.run([NODE, "-e", RUNNER, MAP_JS], input=json.dumps(base), capture_output=True, text=True, timeout=60, check=True)
         return json.loads(out.stdout)
@@ -180,8 +189,8 @@ class Script(unittest.TestCase):
         self.assertEqual(got, ["swamis", "swamis", "d-street", None, None, None, "swamis", None])
 
     def test_pins_shrink_to_dots_when_zoomed_out(self):
-        r = self.run_js(zooms=[9, 10, 10.5, 11, 12, 16])
-        self.assertEqual(r["far"], [True, True, True, False, False, False])
+        r = self.run_js(zooms=[9, 10, 10.5, 11, 11.5, 12, 13, 16])
+        self.assertEqual(r["far"], [True, True, True, True, True, False, False, False])
 
     def test_the_hover_label_says_which_break_and_how_it_rates(self):
         tips = self.run_js(tips=[{"name": "Swami's", "band": "yellow", "rating": 5.55, "label": "Fair"},
@@ -193,10 +202,46 @@ class Script(unittest.TestCase):
     def test_pins_have_a_label_on_hover_and_focus_and_no_slow_native_tooltip(self):
         js = read(MAP_JS)
         self.assertIn("bindTooltip", js)
+        self.assertIn("flyToBounds", js)                   # a badge zooms in on its breaks
         self.assertIn("openTooltip", js)
         self.assertIn("closeTooltip", js)
         self.assertIn("aria-label", js)                    # the pin's accessible name, now that title is gone
         self.assertNotRegex(js, r"title:\s*pinLabel")
+
+    def cluster(self, items, w=40, h=40, keep=()):
+        return self.run_js(clusters=[{"items": [dict(slug=s, x=x, y=y, rating=r) for s, x, y, r in items], "w": w, "h": h, "keep": list(keep)}])["clusters"][0]
+
+    def test_pins_that_collide_become_one_group_led_by_the_best_rated(self):
+        got = self.cluster([("a", 0, 0, 5.0), ("b", 10, 5, 8.0), ("c", 400, 400, 6.0)])
+        self.assertEqual(got, [["b", "a"], ["c"]])
+
+    def test_pins_far_apart_stay_separate(self):
+        self.assertEqual(self.cluster([("a", 0, 0, 5.0), ("b", 100, 0, 6.0), ("c", 0, 100, 7.0)]), [["c"], ["b"], ["a"]])
+
+    def test_the_gap_has_to_be_small_in_both_directions(self):
+        self.assertEqual(self.cluster([("a", 0, 0, 5.0), ("b", 30, 100, 6.0)]), [["b"], ["a"]])      # close across, far down
+        self.assertEqual(self.cluster([("a", 0, 0, 5.0), ("b", 39, 39, 6.0)]), [["b", "a"]])
+        self.assertEqual(self.cluster([("a", 0, 0, 5.0), ("b", 40, 0, 6.0)]), [["b"], ["a"]])         # exactly the limit is not a collision
+
+    def test_a_pin_belongs_to_one_group_only(self):
+        got = self.cluster([("a", 0, 0, 9.0), ("b", 30, 0, 8.0), ("c", 60, 0, 7.0)])
+        self.assertEqual(sorted(s for g in got for s in g), ["a", "b", "c"])
+        self.assertEqual(got, [["a", "b"], ["c"]])                          # c is close to b but b already joined a
+
+    def test_the_open_card_break_is_never_swallowed(self):
+        got = self.cluster([("a", 0, 0, 9.0), ("b", 10, 0, 5.0)], keep=["b"])
+        self.assertEqual(got, [["a"], ["b"]])
+
+    def test_a_kept_break_does_not_absorb_its_neighbours(self):
+        self.assertEqual(self.cluster([("b", 0, 0, 9.0), ("a", 10, 0, 5.0)], keep=["b"]), [["b"], ["a"]])
+
+    def test_nothing_in_nothing_out(self):
+        self.assertEqual(self.cluster([]), [])
+
+    def test_dots_and_pills_use_different_collision_boxes(self):
+        far, near = self.run_js()["boxes"]
+        self.assertEqual(far, {"w": 38, "h": 38})        # a badge
+        self.assertGreater(near["w"], near["h"])          # a pill is wider than it is tall
 
     def test_the_pin_label_reads_well_aloud(self):
         self.assertEqual(self.run_js()["label"], "Swami's, Good, 7.0 out of 10")
@@ -211,7 +256,7 @@ class Script(unittest.TestCase):
             self.assertIn("{z}/{y}/{x}", url)
         self.assertEqual(r["native"], 16)
         self.assertEqual(r["sat"], 11)           # its imagery has no ocean below this
-        self.assertEqual(r["farZoom"], 11)       # and the pins turn from dots to ratings at the same point
+        self.assertEqual(r["farZoom"], 12)       # pins become numbers once neighbours are far enough apart not to cover each other
 
     def test_every_band_has_a_glyph(self):
         self.assertEqual(set(self.run_js()["glyphs"]), {"green", "yellow", "orange", "red"})

@@ -33,7 +33,7 @@
     --axis: #383835;
     --wash: rgba(255, 255, 255, 0.05);
     --link: #6da7ec;
-    --btn: #2a78d6;
+    --btn: #2670c9;
   }
 }
 
@@ -48,7 +48,7 @@
   --axis: #383835;
   --wash: rgba(255, 255, 255, 0.05);
   --link: #6da7ec;
-  --btn: #2a78d6;
+  --btn: #2670c9;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -447,6 +447,9 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .pin-wrap:focus-visible .pin { outline: 3px solid var(--link); outline-offset: 2px; }
 .pin-key { height: 18px; padding: 0 5px; border-width: 1px; box-shadow: none; cursor: default; }
 .map-far .pin-wrap .pin { width: 16px; height: 16px; padding: 0; justify-content: center; border-width: 2px; }
+/* the click area must shrink with the dot: Leaflet sizes it inline, so this needs !important. Otherwise the
+   62 x 30 areas of neighbouring pins overlap and a tap lands on the wrong break. */
+.map-far .pin-wrap { width: 22px !important; height: 22px !important; margin-left: -11px !important; margin-top: -11px !important; }
 .map-far .pin-wrap .pin .pin-num, .map-far .pin-wrap .pin .pin-ico { display: none; }
 .map-far .pin-wrap:hover .pin, .map-far .pin.is-on { transform: scale(1.5); }
 
@@ -500,3 +503,9 @@ a.hero-fig:hover .fig-name { text-decoration: underline; }
 .tip-in { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
 .tip-in strong { font-size: 0.92rem; font-weight: 650; }
 .tip-rate { font-size: 0.82rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* a badge standing for several breaks that are too close to show separately */
+.cluster-wrap { display: flex; align-items: center; justify-content: center; background: none; border: 0; }
+.pin.pin-cluster { width: 34px; height: 34px; padding: 0; justify-content: center; border-width: 3px; font-size: 0.95rem; }
+.map-far .pin-wrap .pin.pin-cluster, .map-far .cluster-wrap .pin.pin-cluster { width: 34px; height: 34px; }
+.map-far .cluster-wrap .pin.pin-cluster .pin-num { display: inline; }

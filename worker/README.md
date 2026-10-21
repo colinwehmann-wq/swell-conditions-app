@@ -55,10 +55,15 @@ are refused. The address is only ever stored as a one-way hash for that hourly c
 
 ## Waking the alert job (so alerts arrive on time)
 
-GitHub's own hourly schedule is best effort: on a quiet repository it can run only every few hours, which is far too
-late for "an hour before the peak". So the Worker wakes the alert job itself, every 30 minutes between 4 AM and 7 PM
-Pacific and only when someone has a profile, by asking GitHub to run the workflow
-([`src/dispatch.js`](src/dispatch.js)). GitHub's schedule stays on as a backup.
+GitHub's own schedules are best effort: on a quiet repository they can run only every few hours, which is far too
+late for "an hour before the peak", and it left the site showing the previous evening's numbers at dawn. So the Worker
+wakes two workflows itself between 4 AM and 7 PM Pacific ([`src/dispatch.js`](src/dispatch.js)):
+
+- the **personal alerts** job, every 30 minutes, when someone has a profile, and
+- the **site rebuild** (`surf-check.yml`: live conditions, the owner's alerts, the public channels), once an hour, with
+  the daily digest on the first run of the 5 AM hour.
+
+GitHub's own schedules stay on as a backup.
 
 It needs one more secret, a GitHub token that can do nothing except run Actions on this one repository:
 
@@ -75,8 +80,8 @@ It needs one more secret, a GitHub token that can do nothing except run Actions 
    npx wrangler deploy
    ```
 
-Check it: `/api/health` shows `dispatch` with the time and result of the last wake-up (`"ok": true, "status": 204` once it
-works; a `401` means the token is wrong or expired). The token expires after a year; make a new one the same way.
+Check it: `/api/health` shows `dispatch` (the alerts job) and `site` (the rebuild), each with the time and result of its
+last wake-up (`"ok": true, "status": 204` once it works; a `401` means the token is wrong or expired). The token expires after a year; make a new one the same way.
 
 ## Running the tests
 

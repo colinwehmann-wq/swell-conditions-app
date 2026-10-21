@@ -14,7 +14,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var FAR_ZOOM = 11;     // below this the pins shrink to dots so the coast doesn't become a pile
+  var FAR_ZOOM = 12;     // below this the pins shrink to dots (and their click areas with them) so neighbours don't cover each other
   var GLYPH = { green: '✓', yellow: '!', orange: '▼', red: '✕' };
   var CHIP = { green: 'chip-good', yellow: 'chip-ok', orange: 'chip-serious', red: 'chip-poor' };
 
@@ -37,6 +37,33 @@
 
   function isFar(zoom) { return zoom < FAR_ZOOM; }
 
+  /* Pins that would sit on top of each other are shown as one badge. `items` are {slug, x, y, rating} with x and y in
+     screen pixels at the current zoom; `w` and `h` are how close (px) two pins can be before they collide. Greedy,
+     best-rated first, so the badge is led by the break you'd want to see. A pin joins at most one cluster, and the
+     slugs in `keep` (the one with its card open) are never absorbed. Returns [[slug, ...], ...], each led by its best. */
+  function cluster(items, w, h, keep) {
+    keep = keep || [];
+    var order = items.slice().sort(function (a, b) { return b.rating - a.rating; });
+    var taken = {};
+    var out = [];
+    order.forEach(function (seed) {
+      if (taken[seed.slug]) return;
+      taken[seed.slug] = true;
+      var group = [seed.slug];
+      if (keep.indexOf(seed.slug) === -1) {
+        order.forEach(function (o) {
+          if (taken[o.slug] || keep.indexOf(o.slug) !== -1) return;
+          if (Math.abs(o.x - seed.x) < w && Math.abs(o.y - seed.y) < h) { taken[o.slug] = true; group.push(o.slug); }
+        });
+      }
+      out.push(group);
+    });
+    return out;
+  }
+
+  /* The size of the box one pin takes up, which is what decides whether two collide. */
+  function pinBox(far) { return far ? { w: 38, h: 38 } : { w: 60, h: 28 }; }       // far: the size of a badge, the biggest thing drawn
+
   /* What a pin says out loud, for screen readers and the hover tooltip. */
   function pinLabel(p) { return p.name + ', ' + p.label + ', ' + Number(p.rating).toFixed(1) + ' out of 10'; }
 
@@ -48,7 +75,7 @@
   }
 
   var api = { tipParts: tipParts, FAR_ZOOM: FAR_ZOOM, NATIVE_ZOOM: NATIVE_ZOOM, SATELLITE_MIN_ZOOM: SATELLITE_MIN_ZOOM, GLYPH: GLYPH, CHIP: CHIP, TILES: TILES, slugFromHash: slugFromHash,
-              isFar: isFar, pinLabel: pinLabel, validMode: validMode };
+              isFar: isFar, pinLabel: pinLabel, validMode: validMode, cluster: cluster, pinBox: pinBox };
 
   // ---------------------------------------------------------------------------- the page
   if (typeof document === 'undefined') return api;
@@ -82,7 +109,9 @@
   L.control.zoom({ position: 'topright' }).addTo(map);
   map.attributionControl.setPrefix(false);
   var calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  map.fitBounds(bounds, { padding: [44, 44] });
+  // Keep the pins clear of the title, style switch and key that sit over the map's corners.
+  var tight = window.innerWidth < 560;
+  map.fitBounds(bounds, { paddingTopLeft: tight ? [24, 150] : [44, 44], paddingBottomRight: tight ? [24, 96] : [44, 44] });
 
   var tiles = null;
   var modeButtons = wrap.querySelectorAll('[data-mode]');
@@ -142,8 +171,59 @@
     markers[p.slug] = { marker: m, pin: pin, point: p };
   });
 
+  // Nearby pins merge into one numbered badge; tapping it zooms in until they separate.
+  var clusterLayer = L.layerGroup().addTo(map);
+  function refreshClusters() {
+    clusterLayer.clearLayers();
+    var zoom = map.getZoom();
+    var box = pinBox(isFar(zoom));
+    var items = points.map(function (p) {
+      var px = map.project([p.lat, p.lon], zoom);
+      return { slug: p.slug, x: px.x, y: px.y, rating: p.rating };
+    });
+    var groups = cluster(items, box.w, box.h, current ? [current] : []);
+    groups.forEach(function (slugs) {
+      var single = slugs.length === 1;
+      slugs.forEach(function (s) { var el = markers[s].marker.getElement(); if (el) el.style.display = single ? '' : 'none'; });
+      if (!single) addBadge(slugs);
+    });
+  }
+
+  function addBadge(slugs) {
+    var members = slugs.map(function (s) { return markers[s].point; });      // best-rated first
+    var best = members[0];
+    var lat = 0, lon = 0;
+    members.forEach(function (m) { lat += m.lat; lon += m.lon; });
+    var at = [lat / members.length, lon / members.length];
+    var badge = document.createElement('div');
+    badge.className = 'pin pin-cluster pin-' + best.band;
+    badge.appendChild(span('pin-num', String(members.length)));
+    var icon = L.divIcon({ html: badge, className: 'cluster-wrap', iconSize: [38, 38], iconAnchor: [19, 19] });
+    var label = members.length + ' breaks here, best is ' + pinLabel(best);
+    var m = L.marker(at, { icon: icon, keyboard: true, riseOnHover: true, zIndexOffset: 5000 + Math.round(best.rating * 100) });
+    var tip = document.createElement('span');
+    tip.className = 'tip-in';
+    var head = document.createElement('strong');
+    head.textContent = members.length + ' breaks, tap to zoom in';
+    tip.appendChild(head);
+    members.slice(0, 6).forEach(function (p) { tip.appendChild(span('tip-rate', GLYPH[p.band] + ' ' + Number(p.rating).toFixed(1) + '  ' + p.name)); });
+    if (members.length > 6) tip.appendChild(span('tip-rate', '+' + (members.length - 6) + ' more'));
+    m.bindTooltip(tip, { direction: 'top', offset: [0, -16], opacity: 1, className: 'pin-tip' });
+    m.on('click', function () {
+      var b = L.latLngBounds(members.map(function (p) { return [p.lat, p.lon]; }));
+      map.flyToBounds(b, { padding: [70, 70], maxZoom: 16, duration: calm ? 0 : 0.5 });
+    });
+    m.addTo(clusterLayer);
+    var el = m.getElement();
+    if (el) {
+      el.setAttribute('aria-label', label);
+      el.addEventListener('focus', function () { m.openTooltip(); });
+      el.addEventListener('blur', function () { m.closeTooltip(); });
+    }
+  }
+
   function farClass() { wrap.classList.toggle('map-far', isFar(map.getZoom())); }
-  map.on('zoomend', farClass);
+  map.on('zoomend', function () { farClass(); refreshClusters(); });
   farClass();
 
   function fillCard(p) {
@@ -171,6 +251,7 @@
     if (current && markers[current]) markers[current].pin.classList.remove('is-on');
     current = slug;
     entry.pin.classList.add('is-on');
+    refreshClusters();
     fillCard(entry.point);
     card.hidden = false;
     wrap.classList.add('has-card');
@@ -186,6 +267,7 @@
   function close() {
     if (current && markers[current]) markers[current].pin.classList.remove('is-on');
     current = null;
+    refreshClusters();
     card.hidden = true;
     wrap.classList.remove('has-card');
     if (history.replaceState && location.hash) history.replaceState(null, '', location.pathname + location.search);
@@ -202,6 +284,7 @@
   }
   window.addEventListener('hashchange', fromHash);
   wrap.setAttribute('data-ready', '1');
+  refreshClusters();
   fromHash();
 
   return api;

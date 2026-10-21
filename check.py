@@ -579,7 +579,7 @@ def run(args):
             today_sun = sun_map.get(today)
             # Chart today while there's still daylight to surf; after that, tomorrow.
             chart_day = today
-            if not today_sun or not today_sun[1] or now > today_sun[1] - datetime.timedelta(minutes=45):
+            if not today_sun or not today_sun[1] or now > evaluate.last_row_start(today_sun[1]):
                 chart_day = tomorrow
             chart_sun = sun_map.get(chart_day)
             site_inputs.append({

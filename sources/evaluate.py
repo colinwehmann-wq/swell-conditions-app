@@ -10,11 +10,16 @@ WEIGHTS = {"height": 0.34, "period": 0.24, "swell_dir": 0.14, "wind": 0.20, "tid
 
 # Bump this whenever the scoring maths changes: the per-break rating anchors in benchmarks.json
 # were measured with it, and a test refuses to run if they're stale (see sources/climate.py).
-SCORING_VERSION = 3
+SCORING_VERSION = 4
 
 # When a hard gate fails (too small, too short, blown out) the rating is capped here: "Poor" at
 # best, however good the other factors look.
 RATING_GATE_CAP = 39.0
+
+# The last hour the app rates starts this long after sunset. People surf into dusk (a session that ends at 6:45 PM on a day
+# the sun set at 6:10 is normal), and it used to stop 45 minutes before sunset, so the best evening hours were never rated
+# and could never trigger an alert. The row starting at 6:00 PM on a 6:10 PM sunset is the last one.
+LAST_ROW_AFTER_SUNSET_MIN = 15
 
 # --- how a raw score becomes a 1-10 rating --------------------------------------------------
 # The raw score says how close conditions are to a break's *peak*: full marks need the longest
@@ -302,6 +307,11 @@ def _conditions(dt, marine_row, wind_row, tide, buoy, use_buoy, calib=None, cfg=
             tide.height(dt) if tide else None)
 
 
+def last_row_start(sunset):
+    """The latest hour the app rates on a day, given that day's sunset: the hour in which the light runs out."""
+    return sunset + datetime.timedelta(minutes=LAST_ROW_AFTER_SUNSET_MIN)
+
+
 def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, calib=None,
                    start=None):
     """Hourly scores for daylight hours that are still ahead (or all of a future day).
@@ -314,7 +324,7 @@ def _daylight_rows(cfg, sun, now, marine, wind, tide, buoy, allow_buoy=True, cal
         return []
     first = floor_hour(start) if start is not None else floor_hour(now)
     dt = max(floor_hour(sunrise), first)
-    last = sunset - datetime.timedelta(minutes=45)   # need real daylight left to surf
+    last = last_row_start(sunset)
     fresh_buoy = allow_buoy and bool(buoy) and not (buoy or {}).get("stale", True)
     rows = []
     while dt <= last:

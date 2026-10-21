@@ -67,14 +67,14 @@ def daylight_hours(waves, wind, tide_height, sun):
 
     waves {hour datetime: (total Hs m, dominant period s, mean direction deg)}; wind {hour datetime:
     (kn, deg)}; tide_height(datetime) -> ft or None; sun {date: (sunrise, sunset)} as datetimes.
-    Daylight runs from the hour of sunrise to 45 minutes before sunset: the same rule the live
-    scoring uses ("need real daylight left to surf").
+    Daylight runs from the hour of sunrise to the hour the light runs out (`evaluate.last_row_start`):
+    the same rule the live scoring uses, so the history and the live rating cover the same hours.
     """
     for day, (rise, set_) in sorted(sun.items()):
         if not rise or not set_:
             continue
         t = rise.replace(minute=0, second=0, microsecond=0)
-        last = set_ - datetime.timedelta(minutes=45)
+        last = evaluate.last_row_start(set_)
         while t <= last:
             w, wk = waves.get(t), wind.get(t)
             tide = tide_height(t) if w and wk else None

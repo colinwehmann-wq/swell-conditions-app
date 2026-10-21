@@ -51,7 +51,7 @@ def make_inputs(now, height_m=1.2, spots=(0, 1), first_name=None):
         res = E.evaluate_spot(cfg, now, None, None, marine, wind, sun[DAY0], sun[DAY0 + datetime.timedelta(days=1)])
         calib = E.calibration(now, marine, wind, None, None)
         today_sun = sun[DAY0]
-        day = DAY0 if now < today_sun[1] - datetime.timedelta(minutes=45) else DAY0 + datetime.timedelta(days=1)
+        day = DAY0 if now <= E.last_row_start(today_sun[1]) else DAY0 + datetime.timedelta(days=1)
         inputs.append({
             "result": res,
             "outlook": E.outlook(cfg, now, None, None, marine, wind, sun, calib, days=7),

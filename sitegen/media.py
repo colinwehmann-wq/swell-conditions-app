@@ -9,6 +9,7 @@ Each `source` link is the file's Commons page, which carries the full licence an
 """
 
 _BY = ("CC BY 2.0", "https://creativecommons.org/licenses/by/2.0/")
+_BY_SA_2 = ("CC BY-SA 2.0", "https://creativecommons.org/licenses/by-sa/2.0/")
 _BY_SA_3 = ("CC BY-SA 3.0", "https://creativecommons.org/licenses/by-sa/3.0/")
 _BY_SA_4 = ("CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/")
 _BY_3 = ("CC BY 3.0", "https://creativecommons.org/licenses/by/3.0/")
@@ -168,6 +169,24 @@ PHOTOS = {
         "alt": "Surf and a hazy headland at Border Field State Park",
         "author": "Tony Webster", "licence": _BY,
         "source": "https://commons.wikimedia.org/wiki/File:Border_Field_State_Park_-_Imperial_Beach_(15850693647).jpg",
+    },
+    "pipes": {
+        "file": "pipes.jpg", "w": 1600, "h": 1200, "pos": "50% 55%",
+        "alt": "The sun setting over the surf at San Elijo State Beach, with two surfers waiting out past the break",
+        "author": "Bjorn", "licence": _BY_SA_2,
+        "source": "https://commons.wikimedia.org/wiki/File:San_Elijo_State_Beach.jpg",
+    },
+    "bird-rock": {
+        "file": "bird-rock.jpg", "w": 1600, "h": 1066, "pos": "50% 45%",
+        "alt": "The Bird Rock coastline, with the reef shelf in the foreground and houses along the bluff",
+        "author": "catlin.wolfard", "licence": _BY_SA_3,
+        "source": "https://commons.wikimedia.org/wiki/File:So_Cal_-_panoramio_(2).jpg",
+    },
+    "buccaneer": {
+        "file": "buccaneer.jpg", "w": 1600, "h": 929, "pos": "50% 75%",
+        "alt": "A surfer sitting in the water as a swell rolls through at sunset in Oceanside",
+        "author": "Jason Zook", "licence": _CC0,
+        "source": "https://commons.wikimedia.org/wiki/File:Oceanside,_United_States_(Unsplash).jpg",
     },
 }
 

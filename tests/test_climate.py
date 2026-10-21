@@ -54,14 +54,25 @@ class Quantiles(unittest.TestCase):
 
 
 class Daylight(unittest.TestCase):
-    def test_covers_sunrise_hour_to_forty_five_minutes_before_sunset(self):
+    def test_covers_sunrise_hour_to_the_hour_the_light_runs_out(self):
         day = datetime.date(2024, 3, 1)
         rise, set_ = datetime.datetime(2024, 3, 1, 6, 20), datetime.datetime(2024, 3, 1, 18, 5)
         hours = {datetime.datetime(2024, 3, 1, h): (1.0, 12.0, 250.0) for h in range(24)}
         wind = {k: (3.0, 75.0) for k in hours}
         got = [h[1] for h in climate.daylight_hours(hours, wind, lambda t: 2.0, {day: (rise, set_)})]
         self.assertEqual(got[0], 6)
-        self.assertEqual(got[-1], 17)
+        self.assertEqual(got[-1], 18)           # sunset 6:05 PM: the 6 PM hour is the one the light runs out in
+
+    def test_the_hour_after_that_is_not_included(self):
+        day = datetime.date(2024, 3, 1)
+        rise, set_ = datetime.datetime(2024, 3, 1, 6, 20), datetime.datetime(2024, 3, 1, 18, 50)   # sunset 6:50 PM
+        hours = {datetime.datetime(2024, 3, 1, h): (1.0, 12.0, 250.0) for h in range(24)}
+        wind = {k: (3.0, 75.0) for k in hours}
+        got = [h[1] for h in climate.daylight_hours(hours, wind, lambda t: 2.0, {day: (rise, set_)})]
+        self.assertEqual(got[-1], 19)           # 7:00 PM starts 10 minutes after sunset: still the last light
+        set_late = datetime.datetime(2024, 3, 1, 18, 40)
+        got = [h[1] for h in climate.daylight_hours(hours, wind, lambda t: 2.0, {day: (rise, set_late)})]
+        self.assertEqual(got[-1], 18)           # 6:55 PM is the last start allowed: 7:00 PM would be dark
 
     def test_skips_hours_missing_any_series(self):
         day = datetime.date(2024, 3, 1)

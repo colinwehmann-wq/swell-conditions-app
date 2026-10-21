@@ -91,6 +91,68 @@ class FetchSpec(unittest.TestCase):
         self.assertTrue(ndbc.fetch_spec("46224", max_age_hours=3.0)["stale"])
 
 
+class SmoothedSpec(unittest.TestCase):
+    """The 'current' reading averages the newest few, so one big set or one lull doesn't swing the rating."""
+
+    def setUp(self):
+        self._orig = ndbc.http.get
+
+    def tearDown(self):
+        ndbc.http.get = self._orig
+
+    def feed(self, readings):
+        """readings: [(minutes_ago, WVHT, SwH, SwP, SwD)], newest first, as a .spec file."""
+        now = datetime.datetime.now(ndbc.UTC)
+        lines = ["#YY  MM DD hh mm WVHT  SwH  SwP  WWH  WWP SwD WWD  STEEPNESS  APD MWD", "#yr  mo dy hr mn    m    m  sec    m  sec  -  degT     -      sec degT"]
+        for ago, wvht, swh, swp, swd in readings:
+            t = (now - datetime.timedelta(minutes=ago)).replace(second=0, microsecond=0)
+            lines.append("%s  %s  %s %s  0.3  4.5 %s   S  AVERAGE  6.1 202" % (t.strftime("%Y %m %d %H %M"), wvht, swh, swp, swd))
+        ndbc.http.get = lambda *a, **k: "\n".join(lines) + "\n"
+        return ndbc.fetch_spec("46224")
+
+    def test_height_is_the_average_of_the_newest_three(self):
+        d = self.feed([(20, 1.6, 1.5, 15.4, 202), (50, 1.3, 1.2, 15.4, 202), (80, 1.4, 1.3, 16.7, 202), (110, 9.9, 9.9, 9.9, 90)])
+        self.assertAlmostEqual(d["swh_m"], (1.5 + 1.2 + 1.3) / 3.0)
+        self.assertAlmostEqual(d["wvht_m"], (1.6 + 1.3 + 1.4) / 3.0)
+        self.assertEqual(d["smoothed_from"], 3)
+
+    def test_a_lone_big_set_is_pulled_back_toward_the_swell(self):
+        d = self.feed([(20, 1.6, 1.5, 15.4, 202), (50, 1.1, 1.0, 15.4, 202), (80, 1.1, 1.0, 15.4, 202)])
+        self.assertLess(d["swh_m"], d["raw"]["swh_m"])
+        self.assertEqual(d["raw"]["swh_m"], 1.5)                         # the unsmoothed newest reading is still there
+
+    def test_period_is_the_median_so_one_odd_reading_does_not_move_it(self):
+        d = self.feed([(20, 1.2, 1.1, 20.0, 202), (50, 1.2, 1.1, 14.3, 202), (80, 1.2, 1.1, 14.3, 202)])
+        self.assertEqual(d["swp_s"], 14.3)
+
+    def test_direction_is_averaged_around_the_circle(self):
+        d = self.feed([(20, 1.2, 1.1, 15.4, 350), (50, 1.2, 1.1, 15.4, 10), (80, 1.2, 1.1, 15.4, 350)])
+        self.assertTrue(d["swd_deg"] > 355 or d["swd_deg"] < 5, d["swd_deg"])      # near north, not near 237
+
+    def test_readings_too_far_back_are_not_averaged_in(self):
+        d = self.feed([(20, 1.6, 1.5, 15.4, 202), (200, 0.5, 0.4, 9.0, 202)])
+        self.assertEqual(d["smoothed_from"], 1)
+        self.assertEqual(d["swh_m"], 1.5)
+
+    def test_a_single_reading_passes_through_unchanged(self):
+        d = self.feed([(20, 1.6, 1.5, 15.4, 202)])
+        self.assertEqual((d["swh_m"], d["swp_s"], d["swd_deg"]), (1.5, 15.4, 202.0))
+
+    def test_a_reading_missing_one_field_still_averages_the_rest(self):
+        d = self.feed([(20, 1.6, "MM", 15.4, 202), (50, 1.3, 1.2, 15.4, 202), (80, 1.4, 1.4, 15.4, 202)])
+        self.assertAlmostEqual(d["swh_m"], (1.2 + 1.4) / 2.0)
+
+    def test_age_and_staleness_follow_the_newest_reading_not_the_average(self):
+        d = self.feed([(20, 1.6, 1.5, 15.4, 202), (50, 1.3, 1.2, 15.4, 202), (80, 1.4, 1.3, 15.4, 202)])
+        self.assertLess(d["age_hours"], 0.5)
+        self.assertFalse(d["stale"])
+
+    def test_everything_the_rest_of_the_app_reads_is_still_there(self):
+        d = self.feed([(20, 1.6, 1.5, 15.4, 202), (50, 1.3, 1.2, 15.4, 202)])
+        for key in ("buoy", "time", "age_hours", "stale", "wvht_m", "swh_m", "swp_s", "wwh_m", "wwp_s", "swd_deg", "apd_s", "mwd_deg"):
+            self.assertIn(key, d, key)
+
+
 class FetchSpecHistory(unittest.TestCase):
     def setUp(self):
         self._orig = ndbc.http.get

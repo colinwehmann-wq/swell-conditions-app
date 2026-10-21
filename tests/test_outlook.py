@@ -97,8 +97,8 @@ class Timeline(unittest.TestCase):
         marine, wind = forecast(2)
         rows = E.timeline(CFG, DAY0, sun_for(1)[DAY0], at(0, 20), None, None, marine, wind, IDENTITY)
         self.assertEqual(rows[0]["time"].hour, 6)              # starts at sunrise, not at "now"
-        self.assertEqual(rows[-1]["time"].hour, 17)            # stops 45 min before sunset
-        self.assertEqual(len(rows), 12)
+        self.assertEqual(rows[-1]["time"].hour, 18)            # sunset is 6:00 PM: the 6 PM hour is the last, so dusk sessions count
+        self.assertEqual(len(rows), 13)
 
 
 class Calibration(unittest.TestCase):

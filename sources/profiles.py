@@ -172,6 +172,18 @@ def _in_words(delta):
     return "in about %d hours" % round(minutes / 60.0)
 
 
+def when_phrase(window, now):
+    """Where a window stands: still ahead, peaking now, or already under way with its best hour behind us."""
+    peak = window["peak"]["time"]
+    gap = peak - now
+    span = "%s to %s" % (hour_label(window["start"]), hour_label(window["end"]))
+    if gap > datetime.timedelta(minutes=10):
+        return "best around %s (%s), lined up %s" % (clock(peak), _in_words(gap), span)
+    if gap >= -datetime.timedelta(minutes=10):
+        return "peaking now, lined up %s" % span
+    return "on now until %s (best was around %s)" % (hour_label(window["end"]), clock(peak))
+
+
 def message(name, window, cfg, now, site_url=""):
     """(title, body) for one alert."""
     peak = window["peak"]
@@ -179,9 +191,7 @@ def message(name, window, cfg, now, site_url=""):
     rating = words.rating(peak["score"])
     title = "%s: your conditions peak at %s" % (name, hour_label(peak["time"]))
     lines = [
-        "Your ideal conditions are lined up %s. Best around %s (%s)." % (
-            "%s to %s" % (hour_label(window["start"]), hour_label(window["end"])),
-            clock(peak["time"]), _in_words(peak["time"] - now)),
+        "Your ideal conditions: %s." % when_phrase(window, now),
         "",
         "Waves: %s, %s (%.1f ft at %d s)" % (words.size_words(h), words.power_words(p), h, round(p)),
         "Wind: %s" % words.wind_words(wk, wd, cfg),
@@ -192,3 +202,30 @@ def message(name, window, cfg, now, site_url=""):
     if site_url:
         lines += ["", "Edit your ideal conditions: %s/profile/" % site_url.rstrip("/")]
     return title, "\n".join(lines)
+
+
+MAX_LISTED = 8          # more breaks than this in one message are summarised as "+N more"
+
+
+def digest(items, now, site_url=""):
+    """(title, body) for everything due for one person at once: one message that lists every break that
+    matches their ideal conditions, best-rated first. `items` is [(cfg, window), ...]. A single break
+    gets the fuller message above."""
+    items = sorted(items, key=lambda it: -it[1]["peak"]["score"])
+    if len(items) == 1:
+        cfg, window = items[0]
+        return message(cfg["name"], window, cfg, now, site_url=site_url)
+    lines = ["These breaks match your ideal conditions:", ""]
+    for i, (cfg, window) in enumerate(items[:MAX_LISTED], 1):
+        peak = window["peak"]
+        h, p, sd, wk, wd, tide = peak["cond"]
+        rating = words.rating(peak["score"])
+        wind = "%d kt %s" % (round(wk), words.compass(wd)) if wk is not None else "wind unknown"
+        lines.append("%d. %s: %s" % (i, cfg["name"], when_phrase(window, now)))
+        lines.append("   %.1f ft at %d s, %s, %s ft tide, %s %.1f/10" % (
+            h, round(p), wind, "%.1f" % tide if tide is not None else "?", words.rating_label(rating), rating))
+    if len(items) > MAX_LISTED:
+        lines.append("+%d more" % (len(items) - MAX_LISTED))
+    if site_url:
+        lines += ["", "Edit your ideal conditions: %s/profile/" % site_url.rstrip("/")]
+    return "%d of your breaks are lining up" % len(items), "\n".join(lines)

@@ -64,8 +64,8 @@ class Plan(unittest.TestCase):
 
     def test_alerts_an_hour_before_the_peak(self):
         todo = J.plan([person()], CFGS, self.rows_for, {}, at(7, 5))
-        self.assertEqual([(t, s) for t, s, _, _ in todo], [("swell-aaaa", "swamis")])
-        self.assertEqual(todo[0][2]["peak"]["time"], at(8))
+        self.assertEqual([(t, [s for s, _, _ in items]) for t, items in todo], [("swell-aaaa", ["swamis"])])
+        self.assertEqual(todo[0][1][0][1]["peak"]["time"], at(8))
 
     def test_not_before_the_lead_time(self):
         self.assertEqual(J.plan([person()], CFGS, self.rows_for, {}, at(6, 5)), [])
@@ -73,7 +73,7 @@ class Plan(unittest.TestCase):
     def test_not_twice(self):
         state = {}
         first = J.plan([person()], CFGS, self.rows_for, state, at(7, 5))
-        P.record(state, "swell-aaaa", "swamis", first[0][2], at(7, 5))
+        P.record(state, "swell-aaaa", "swamis", first[0][1][0][1], at(7, 5))
         self.assertEqual(J.plan([person()], CFGS, self.rows_for, state, at(8, 5)), [])
 
     def test_quiet_hours_hold_it_back(self):
@@ -88,14 +88,30 @@ class Plan(unittest.TestCase):
     def test_each_person_is_judged_on_their_own_conditions(self):
         picky = person(topic="swell-bbbb", prefs={"height_ft": [8, 12], "period_min_s": 10})
         todo = J.plan([person(), picky], CFGS, self.rows_for, {}, at(7, 5))
-        self.assertEqual([t for t, *_ in todo], ["swell-aaaa"])
+        self.assertEqual([t for t, _ in todo], ["swell-aaaa"])
 
-    def test_best_rated_break_first_and_capped(self):
+    def test_every_matching_break_goes_in_one_entry_per_person_best_rated_first(self):
         many = {"b%d" % i: {"slug": "b%d" % i, "name": "B%d" % i, "offshore_dir_deg": [40, 110]} for i in range(5)}
         rows = {slug: good_rows(score=50.0 + i * 5) for i, slug in enumerate(many)}
         todo = J.plan([person(breaks=list(many))], many, lambda cfg: rows[cfg["slug"]], {}, at(7, 5))
-        self.assertEqual(len(todo), J.MAX_PER_RUN)
-        self.assertEqual([s for _, s, _, _ in todo], ["b4", "b3", "b2"])
+        self.assertEqual(len(todo), 1)                                    # one message, not five
+        self.assertEqual([s for s, _, _ in todo[0][1]], ["b4", "b3", "b2", "b1", "b0"])
+
+    def test_breaks_that_do_not_match_this_person_are_left_out(self):
+        rows = {"swamis": good_rows(), "windansea": [dict(r, cond=(9.0, 14.0, 250, 3.0, 75, 2.5)) for r in good_rows()]}
+        todo = J.plan([person(breaks=["swamis", "windansea"])], CFGS, lambda cfg: rows[cfg["slug"]], {}, at(7, 5))
+        self.assertEqual([s for s, _, _ in todo[0][1]], ["swamis"])
+
+    def test_a_break_already_alerted_is_not_repeated_but_a_new_one_still_goes(self):
+        state = {}
+        first = J.plan([person(breaks=["swamis"])], CFGS, self.rows_for, state, at(7, 5))
+        P.record(state, "swell-aaaa", "swamis", first[0][1][0][1], at(7, 5))
+        both = J.plan([person(breaks=["swamis", "windansea"])], CFGS, self.rows_for, state, at(7, 35))
+        self.assertEqual([s for s, _, _ in both[0][1]], ["windansea"])
+
+    def test_two_people_get_their_own_messages(self):
+        todo = J.plan([person(), person(topic="swell-bbbb", breaks=["windansea"])], CFGS, self.rows_for, {}, at(7, 5))
+        self.assertEqual([t for t, _ in todo], ["swell-aaaa", "swell-bbbb"])
 
 
 class State(unittest.TestCase):

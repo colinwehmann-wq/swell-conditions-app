@@ -124,8 +124,9 @@ Let the error table decide:
 - Error grows with lead time: add upstream buoys (Catalina Ridge 46025, Tanner Banks 46047).
 - Direction error dominates: use NDBC/CDIP directional spectra instead of 22.5° compass text.
 - "Clean" calls keep missing: NWS gridded wind plus live nearby wind observations.
-- One break is always off in size: a per-spot size factor, or CDIP's MOP nearshore model if a
-  live forecast feed exists (archived files are confirmed; a live feed is not).
+- One break is always off in size: a per-spot size factor, or CDIP's MOP nearshore model. Its live
+  forecast feed is confirmed (3-hourly, ~10 days, one point per ~100 m, over OPeNDAP) and is now
+  logged beside the app's model for every break (`sources/cdip.py`, `tools/mop_report.py`).
 - Small extras: observed vs predicted water level, the NWS surf zone forecast as a sanity check.
 - Later: a real "was it good?" loop with session ratings or surf cams.
 

@@ -113,6 +113,11 @@ jobs:
         continue-on-error: true
         run: python3 tools/skill_report.py forecast-log >> "$GITHUB_STEP_SUMMARY"
 
+      - name: CDIP MOP comparison
+        if: always()
+        continue-on-error: true
+        run: python3 tools/mop_report.py forecast-log >> "$GITHUB_STEP_SUMMARY"
+
       - name: Package the site
         uses: actions/upload-pages-artifact@v3
         with:

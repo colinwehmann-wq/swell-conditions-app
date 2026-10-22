@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 import sitegen
-from sources import evaluate, forecast, http, ndbc, notify, tides, verify
+from sources import cdip, evaluate, forecast, http, ndbc, notify, tides, verify
 from sources.words import (
     compass as _compass,
     power_words as _power_words,
@@ -621,7 +621,7 @@ def run(args):
         print("site written to %s" % args.site, file=sys.stderr)
 
     if args.log_dir:
-        _log_forecasts(now, args.log_dir)
+        _log_forecasts(now, args.log_dir, _mop_breaks(ctx, spots))
 
     if args.json:
         print(json.dumps(_jsonable(results, now), indent=2, default=str))
@@ -686,11 +686,18 @@ def send_alerts(alerts, now):
                     private=bool(res["cfg"]["mine"]))
 
 
-def _log_forecasts(now, log_dir):
+def _mop_breaks(ctx, spots):
+    """{slug: (MOP site, the app's hourly model data)} for every break with a MOP match (mop_sites.json)."""
+    sites = cdip.load_sites()
+    return {c["slug"]: (sites[c["slug"]]["site"], ctx.marine(c["lat"], c["lon"]))
+            for c in spots if c["slug"] in sites}
+
+
+def _log_forecasts(now, log_dir, mop_breaks=None):
     """Append this run's model forecasts and buoy readings to the accuracy log. Best effort:
     a failure here is reported on stderr and never stops the check or its alerts."""
     try:
-        out = verify.collect(now, log_dir)
+        out = verify.collect(now, log_dir, mop_breaks=mop_breaks)
     except Exception as e:  # noqa: BLE001
         print("  ! forecast log failed: %s" % e, file=sys.stderr)
         return

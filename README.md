@@ -263,6 +263,16 @@ turns that into error tables by model and lead time, with a "assume nothing chan
 (never on `main`); the report is printed in each Actions run's summary. Turn it on locally with
 `python3 check.py --report --log-dir forecast-log`, then `python3 tools/skill_report.py`.
 
+**CDIP MOP comparison (an experiment; it changes no rating).** Scripps' CDIP publishes a
+nearshore wave forecast for a point every ~100 m of coast
+([`thredds.cdip.ucsd.edu`](https://thredds.cdip.ucsd.edu/), free, no key; credit CDIP). Each
+break is matched to its nearest point in [`mop_sites.json`](mop_sites.json) (rebuild with
+`python3 tools/build_mop_sites.py`), and about twice a day the log records that forecast next to
+the wave model the app scores the break with. `tools/mop_report.py` (also in each run's Actions
+summary) shows, per break, how they differ in size, period and direction and which one the MOP
+nowcast later agreed with. If MOP proves better at a break, switching to it is a separate,
+deliberate change: it would need the benchmarks rebuilt from MOP's hindcast.
+
 The reasoning, and what comes after measuring (blending models, scoring both swell trains, then
 upstream buoys, wind and nearshore transformation), is in
 [`docs/FORECAST_PLAN.md`](docs/FORECAST_PLAN.md).
